@@ -1,0 +1,107 @@
+---
+title: "Gt - Standardized"
+author: "Frenk C.J. van Mil"
+date: "3/27/2020"
+output: pdf_document
+---
+
+```{r, result='hide', echo=FALSE, include=FALSE}
+source('statistics.R')
+knitr::opts_chunk$set(comment = NA)
+knitr::opts_chunk$set(results = 'asis')
+```
+
+# Ground-truth inspection
+```{r}
+gt <- get_ground_truth()
+gt_traits = c('Openness', 'Conscientiousness', 'Extraversion', 'Agreeableness', 'Neuroticism')
+```
+
+```{r}
+transformations <- list(
+  c(13, log10_transform)
+)
+data <- read_single_db('selected_dev_parsed', transformations = transformations)
+
+range01 <- function(x){(x-min(x))/(max(x)-min(x))}
+
+# Standardize data
+for (i in 2:length(data)) {
+  data[,i] <- scale(data[,i], center=TRUE)
+}
+for (i in 2:6) {
+  gt[,i] <- scale(gt[,i], center=TRUE)
+}
+```
+
+```{r, fig.width=9, fig.height=6}
+par(mfrow=c(5,4), oma=c(3,1,0,0), mar=c(2,2,1,0), mgp=c(3,1,0))
+for (i in 2:6) {
+  hist(data[,i], main=fix_column_name(colnames(data)[[i]]), col=color[[i]], xlab='Score')
+  hist(data[,i+5], main=fix_column_name(colnames(data)[[i+5]]), col=color[[i]], xlab='Score')
+  hist(data[,i+10], main=fix_column_name(colnames(data)[[i+10]]), col=color[[i]], xlab='Score')
+  hist(gt[,i], main=paste('GT',gt_traits[i-1]), col=color[[i]], xlab='Score')
+}
+```
+
+```{r}
+abs_difference_plot <- function(df, gt) {
+  ae <- AE(df, gt)
+  for (trait_idx in 1:5) {
+    pi_idx <- trait_idx + 1
+    yark_idx <- trait_idx + 6
+    golb_idx <- trait_idx + 11
+    
+    plot(1:nrow(ae), sort(ae[,pi_idx]), type='n',
+         main=paste0('Absolute differences sorted [',traits[[trait_idx]],']'),
+         xlab='People',
+         ylab='Absolute difference')
+    lines(1:nrow(ae), sort(ae[,pi_idx]), col=color$c1)
+    lines(1:nrow(ae), sort(ae[,yark_idx]), col=color$c2)
+    lines(1:nrow(ae), sort(ae[,golb_idx]), col=color$c3)
+    legend(x="topleft", y=0.92, c('pi','yarkoni','golbeck'), col=c(color$c1, color$c2, color$c3), pch=rep('-',3), lwd=5)
+  }
+}
+abs_difference_plot(data, gt)
+```
+
+```{r}
+difference_plot <- function(df, gt) {
+  df <- df[df$id %in% gt$id,]
+  gt <- gt[gt$id %in% df$id,]
+  for (trait_idx in 1:5) {
+    pi_idx <- trait_idx + 1
+    yark_idx <- trait_idx + 6
+    golb_idx <- trait_idx + 11
+    
+    ordered_gt <- gt[order(gt[,trait_idx+1]),]
+    ordered_df <- df[order(match(df$id, ordered_gt$id)),]
+    
+    plot(1:nrow(ordered_gt), ordered_gt[,pi_idx], type='n',
+         main=paste0('Ordered scores [',traits[[trait_idx]],']'),
+         xlab='People',
+         ylab='Absolute difference')
+    lines(1:nrow(ordered_gt), ordered_gt[,trait_idx+1], col='black')
+    lines(1:nrow(ordered_gt), ordered_df[,pi_idx], col=color$c1)
+    lines(1:nrow(ordered_gt), ordered_df[,yark_idx], col=color$c2)
+    lines(1:nrow(ordered_gt), ordered_df[,golb_idx], col=color$c3)
+    # lines(1:nrow(ordered_gt), rep(0.62,nrow(ordered_gt)), col='black', lty=2)
+    # abline(v=c(250), lty=2)
+    legend(x="topleft", y=0.92, c('pi','yarkoni','golbeck'), col=c(color$c1, color$c2, color$c3), pch=rep('-',3), lwd=5)
+  }
+}
+difference_plot(data, gt)
+```
+
+```{r}
+data_cp <- data.frame(data)
+for (c in 2:16) {
+  data_cp[,c] <- data_cp[,c] - mean(data_cp[,c])
+}
+gt_cp <- data.frame(gt)
+for (c in 2:6) {
+  gt_cp[,c] <- gt_cp[,c] - mean(gt_cp[,c])
+}
+difference_plot(data_cp, gt_cp)
+```
+

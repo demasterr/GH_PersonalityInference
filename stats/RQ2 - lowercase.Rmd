@@ -1,0 +1,178 @@
+---
+title: "Research Question 2 - lowercase"
+author: "Frenk C.J. van Mil"
+output:
+  pdf_document: default
+  html_document:
+    df_print: paged
+  word_document: default
+---
+
+```{r, result='hide', echo=FALSE, include=FALSE}
+source('statistics.R')
+```
+
+```{r, results='hide', echo=FALSE, include=FALSE}
+transformations <- list(
+  c(13, log10_transform)
+)
+dbs_res <- readdbs('selected_dev_parsed', 'selected_dev_parsed_lowercase', transformations=transformations, sort = TRUE)
+
+data_og <- dbs_res$db1
+data_cmp <- dbs_res$db2
+
+dfs <- list(data_og, data_cmp)
+dfnames = c('original', 'lowercase')
+rm(dbs_res)
+```
+
+In order to evaluate research question 2, we need to connect to the MySQL database first. From the database we fetch to dataframes, _data\_og_ (scores with all preprocessing steps enabled) and _data\_cmp_ (scores with uppercases/no lower case parsing). Any column indicating significance (signf) means a `p-value` below `0.05` is found.
+
+## Summarize data
+```{r}
+summarize_df(dfs, dfnames=dfnames, fix_naming=TRUE)
+```
+
+From the summary of above, we can see at a first glance that the lowercase parsing does not affect the outcome of any of the methods, or at least not significantly.
+
+Furthermore, by looking at the median and the mean, we can see they or often equal or fairly close. This would mean they are likely not skewed to the left or right. Therefore, normality may be possible.
+
+First we check if there even is a difference in a single row and column.
+
+```{r}
+inspect_AE_differences(df1 = data_og, df2 = data_cmp)
+```
+From the above, we can conclude there is no influence with this preprocessing step on Yarkoni or Golbeck. For PI, only for 66 people there is a difference. We should further investigate this difference.
+
+```{r}
+# Reduce the columns to the columns that have an effect.
+data_og <- data_og[,1:6]
+row.names(data_og) <- NULL
+data_cmp <- data_cmp[,1:6]
+row.names(data_cmp) <- NULL
+dfs <- list(data_og, data_cmp)
+```
+
+```{r}
+latex_table(func=inspect_AE_differences, 
+            caption=paste("Differences in scores for PI with and without", dfnames[[2]], "parsing."),
+            label=paste0('tab:', dfnames[[2]],'_diff'),
+            include_index = TRUE,
+            fix_column = 0,
+            df1 = data_og, df2 = data_cmp)
+```
+
+First we will look if the distributions are normal or not. To visualize this, we draw histograms, density plots, and QQ-plots.
+
+```{r}
+hist_all(data_og, data_cmp)
+```
+```{r}
+density_all(data_og, data_cmp, name2='lowercase')
+```
+
+```{r, cache=TRUE}
+draw_qqplots(data_og, data_cmp)
+```
+
+By looking at the QQ-plots, we can see that some appear at least near-normally distributed. However, most do not seem to be normally distributed.
+
+
+## Shapiro-Wilk Normality test
+To make check our findings of the QQ-plots, we could use Shapiro-Wilk normality testing to check if the traits are significantly non-normal.
+```{r}
+sample_size <- 50
+repeats <- 1000
+shap_og <- shap(data_og, sample_size=sample_size)
+print(shap_og)
+
+shap_cmp <- shap(data_cmp, sample_size=sample_size)
+print(shap_cmp)
+
+repeated(shap, repeats, data_og, sample_size) # Check if the p-values are most of the time right.
+repeated(shap, repeats, data_og, sample_size=sample_size) # Check if the p-values are most of the time right.
+```
+
+
+From the above we can conclude that the data is significanlty different from a normal distribution for openness and normal for the other four traits.
+
+```{r}
+normal_cols <- c(1,3:6)
+non_normal_cols <- c(1:2)
+```
+
+
+## Fisher test (compare variances)
+Before we can compare whether there is a difference in means, we first need to compare the variances.
+
+```{r}
+fisherf_df <- fisherf(data_og, data_cmp)
+fisherf_df
+```
+From the Fisher F test, we could not find any significant difference between the personality traits. Therefore, we could not lay any strong conclusions here.
+
+## Wilcoxon signed rank test with continuaty correction (paired = TRUE)
+```{r}
+wilc_df <- wilc(data_og[,non_normal_cols], data_cmp[,non_normal_cols], paired = TRUE, p=0.05, method="wilcoxon-pratt")
+wilc_df
+```
+
+Because we found all columns to be significantly different from a normal distribution, we use the Wilcox rank sum test. The Wilcox rank sum test should show us under the hypothesis that the two means are the same. We assume that the pairing is needed, as the scores are drawn for the same person but with different parsing.
+For the columns `yarkoni_openness`, `yarkoni_extraversion`, `yarkoni_agreeableness`, and `golbeck_agreeableness` we conclude that there is enough signficance to reject the null-hypothesis, meaning for these columns the means are significantly different from each other.
+
+## T-test
+```{r}
+ttest_df <- ttest(data_og[,normal_cols], data_cmp[,normal_cols])
+ttest_df
+```
+
+If the data would be normally distributed, we could also have used the t-test. Again, we get the same results as with the Wilcox signed rank and sum ranked tests.
+
+## Effect size mean - Cohen's d
+```{r}
+cohensd_df <- cohensd(data_og[,normal_cols], data_cmp[,normal_cols])
+cohensd_df
+```
+
+```{r}
+latex_table(func=wilc, caption=paste("Paired Wilcoxon signed-rank test between the original data and", dfnames[[2]],"parsing disabled."), label=paste0("tab:",dfnames[[2]],"_wilcox"), df1=data_og[,non_normal_cols], df2=data_cmp[,non_normal_cols], p=0.05, paired=TRUE, method='wilcoxon-pratt')
+```
+
+
+```{r}
+latex_table(func=ttest_eff, caption=paste("Paired t-test and Cohen's d effect sizes between the original data and", dfnames[[2]],"parsing disabled."), label=paste0("tab:",dfnames[[2]],"_ttest"), df1=data_og[,normal_cols], df2=data_cmp[,normal_cols], p=0.05, paired=TRUE)
+```
+
+## Plots
+```{r}
+plot_line_ordered(data_og, data_cmp)
+```
+
+
+```{r}
+trait_boxplots(data_og, data_cmp)
+```
+
+```{r}
+ggplot_line_ordered(data_og, data_cmp)
+```
+
+```{r}
+gt <- get_ground_truth()
+
+inspect_gt_non_zero(data_og, data_cmp, dfnames=dfnames, gt=gt)
+```
+
+```{r}
+gt <- get_ground_truth()
+
+inspect_gt_non_zero(data_og, data_cmp, dfnames=dfnames, gt=gt, people=TRUE)
+```
+
+```{r}
+whos_better(data_og, data_cmp, gt, dfnames=dfnames, allowed_error=0.001)
+```
+
+### Conclusion
+From all methods used above, we found that for all columns of PI, there is no difference with the use of lowercase parsing. Same goes for Conscientiousness, Neuroticism for Yarkoni and all columns except for Agreeableness for Golbeck.
+

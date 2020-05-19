@@ -1,0 +1,100 @@
+---
+title: "Research Question 4 - merged values"
+author: "Frenk C.J. van Mil"
+output:
+  pdf_document: default
+  html_document:
+    df_print: paged
+  word_document: default
+---
+
+```{r, result='hide', echo=FALSE, include=FALSE}
+source('statistics.R')
+source('rq4.R')
+
+dbname <- 'selected_dev_parsed'
+```
+
+### Read the data
+```{r, results='hide', echo=FALSE, include=FALSE}
+transformations <- list(
+  c(13, log10_transform)
+)
+# Read the database values
+mysql <- get_connection()
+data <- read_single_db(dbname, transformations=transformations)
+data <- normalize_data(data)
+data[,-1] <- round(data[,-1], 2)
+dbDisconnect(mysql)
+
+# Read the participants.
+participants <- readcsv('../data/final_participants.csv')
+
+detach('package:dplyr', unload=TRUE)
+library(dplyr)
+EPI <- participants %>% select(id, EPI) %>% filter(EPI != 'Unknown')
+EPI <- merge(EPI, data, by="id")
+EPI$EPI[EPI$EPI == "Very low"] <- "Low"
+EPI$EPI[EPI$EPI == "Very high"] <- "High"
+epi_order <- c("Low", "Moderate", "High")
+EPI$EPI <- factor(EPI$EPI, levels=epi_order)
+EPI <- EPI[order(EPI$EPI),]
+EPI
+```
+
+### Box plots
+```{r warning=FALSE}
+# Suppressed warning for removed NA values.
+boxplots_rq4()
+```
+
+### Density plots
+```{r}
+density_rq4()
+```
+
+```{r}
+dfs <- get_seperate_lists(EPI, 2, epi_order)
+```
+
+### Normality with QQ-Plots
+```{r}
+draw_qqplots_rq4(dfs, dfnames=epi_order)
+```
+
+
+```{r}
+repeated_shap_rq4()
+```
+
+We now check for normality with Shapiro-Wilk. The values reported above are for the Very low, Low, Moderate, High, and Very high EPI. '2 FALSE : 692' means that for column 2 (pi_openness) 692 FALSE was given for p<0.05 (and 308 times TRUE). In this case we would conclude normality, as there is no significance for non-normality. Columns start from 2 to 16 with OCEAN ordered Big Five traits in the order of PI, Yarkoni, and Golbeck.
+
+### Show the variances of the different methods for each EPI level
+```{r}
+variances_rq4()
+```
+
+In the figure, we can see that PI has more variance than Yarkoni, and Yarkoni has more variance than Golbeck. We can also observe a slight decrease in variance from 'Very low' to 'Very high' EPI.
+
+## Check for a difference in means with Wilcoxon signed-rank test.
+```{r}
+compare(wilc, dfs, dfnames=epi_order, paired=FALSE, p=0.05)
+```
+
+## Check for a difference in means with t-test.
+```{r}
+compare(ttest, dfs, dfnames=epi_order, paired=FALSE, p=0.05)
+```
+
+## Check for effect size in means with Cohen's d.
+```{r}
+compare(cohensd, dfs, dfnames=epi_order, paired=FALSE)
+```
+
+
+## Check for a difference in variance with Fisher F-test.
+```{r}
+compare(fisherf, dfs, dfnames=epi_order, p=0.05)
+```
+
+

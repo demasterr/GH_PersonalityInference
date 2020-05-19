@@ -1,0 +1,294 @@
+---
+title: "Gt"
+author: "Frenk C.J. van Mil"
+date: "3/27/2020"
+output: pdf_document
+---
+
+```{r, result='hide', echo=FALSE, include=FALSE}
+source('statistics.R')
+knitr::opts_chunk$set(comment = NA)
+knitr::opts_chunk$set(results = 'asis')
+```
+
+# Ground-truth inspection
+```{r}
+gt <- get_ground_truth()
+gt_traits = c('Openness', 'Conscientiousness', 'Extraversion', 'Agreeableness', 'Neuroticism')
+```
+
+Looks quite normally distributed!
+```{r}
+summarize_df(dfs=list(gt[1:6]), dfnames=NULL)
+```
+```{r}
+latex_table(summarize_df, caption="The distribution of personality traits for survey respondents. The first column indicates the Big-Five personality trait inferred from the BFI questionnaire. Min indicates the minimum value in the complete dataset of personality scores, followed by the first quartile score, median, mean, third quartile, and maximum personality scores found for each trait.", label="tab:ground-truth", dfs=list(gt[1:6]), dfnames=NULL, fix_naming=TRUE, scale_100=FALSE)
+```
+
+```{r}
+par(mfrow=c(3,2))
+for (i in 2:6) {
+  hist(gt[,i], main=gt_traits[i-1], col=color[[i]], xlab='Score', xlim=c(0,1.0), breaks=seq(0,1.0,by=0.1), ylim=c(0,80))
+}
+```
+
+Density graphs also show quite normally distributed scores.
+```{r}
+for (i in 2:6) {
+  plot(density(gt[,i]), main=gt_traits[i-1])
+}
+```
+
+```{r}
+draw_boxplots <- function() {
+  selected.m <- melt(gt[,c(1:6)], id.vars='id')
+  p <- ggplot(selected.m, aes(variable, value))
+  p + geom_boxplot()
+}
+draw_boxplots()
+```
+
+```{r}
+# TODO countries
+```
+
+```{r}
+transformations <- list(
+  c(13, log10_transform)
+)
+data <- read_single_db('selected_dev_parsed', transformations = transformations)
+```
+
+```{r, fig.width=9, fig.height=6}
+par(mfrow=c(5,4), oma=c(3,1,0,0), mar=c(2,2,1,0), mgp=c(3,1,0))
+for (i in 2:6) {
+  hist(data[,i], main=fix_column_name(colnames(data)[[i]]), col=color[[i]], xlab='Score', xlim=c(0,1.0), breaks=seq(0,1.0,by=0.1))
+  hist(data[,i+5], main=fix_column_name(colnames(data)[[i+5]]), col=color[[i]], xlab='Score', xlim=c(0,1.0), breaks=seq(0,1.0,by=0.1))
+  hist(data[,i+10], main=fix_column_name(colnames(data)[[i+10]]), col=color[[i]], xlab='Score', xlim=c(0,1.0), breaks=seq(0,1.0,by=0.1))
+  hist(gt[,i], main=paste('GT',gt_traits[i-1]), col=color[[i]], xlab='Score', xlim=c(0,1.0), breaks=seq(0,1.0,by=0.1))
+}
+```
+
+```{r}
+latex_table(summarize_df, caption="Distribution of all inferred scores and the methods used.", label="tab:data_full_summary", dfs=list(data), dfnames=NULL, fix_naming=TRUE)
+```
+
+```{r}
+mean(data[,16])
+median(data[,16])
+```
+
+```{r}
+# normal_cols = c(1,3,4,6:9,11,12,14)
+# non_normal_cols = c(1,2,5,10,13,15,16)
+for (i in 0:4) {
+  first <- 2 + i
+  second <- 7 + i
+  print(paste(colnames(data)[[first]],colnames(data)[[second]]))
+  wilc_a <- wilcox.test(data[,first], data[,second], paired=TRUE)
+  wilc_a_eff <- rFromWilcox(wilc_a, nrow(data))
+  wilc_a_magn <- effsize_translation_r(wilc_a_eff)
+  
+  print(wilc_a)
+  print(wilc_a_eff)
+  print(wilc_a_magn)
+}
+
+```
+
+```{r}
+plot(sort(data[,10]))
+```
+
+```{r}
+abs_difference_plot <- function(df, gt) {
+  ae <- AE(df, gt)
+  for (trait_idx in 1:5) {
+    pi_idx <- trait_idx + 1
+    yark_idx <- trait_idx + 6
+    golb_idx <- trait_idx + 11
+    
+    plot(1:nrow(ae), sort(ae[,pi_idx]), type='n',
+         main=paste0('Absolute differences sorted [',traits[[trait_idx]],']'),
+         xlab='People',
+         ylab='Absolute difference')
+    lines(1:nrow(ae), sort(ae[,pi_idx]), col=color$c1)
+    lines(1:nrow(ae), sort(ae[,yark_idx]), col=color$c2)
+    lines(1:nrow(ae), sort(ae[,golb_idx]), col=color$c3)
+    legend(x="topleft", y=0.92, c('pi','yarkoni','golbeck'), col=c(color$c1, color$c2, color$c3), pch=rep('-',3), lwd=5)
+  }
+}
+abs_difference_plot(data, gt)
+```
+
+```{r}
+difference_plot <- function(df, gt) {
+  df <- df[df$id %in% gt$id,]
+  gt <- gt[gt$id %in% df$id,]
+  for (trait_idx in 1:5) {
+    pi_idx <- trait_idx + 1
+    yark_idx <- trait_idx + 6
+    golb_idx <- trait_idx + 11
+    
+    ordered_gt <- gt[order(gt[,trait_idx+1]),]
+    ordered_df <- df[order(match(df$id, ordered_gt$id)),]
+    
+    plot(1:nrow(ordered_gt), ordered_gt[,pi_idx], type='n',
+         main=paste0('Ordered scores [',traits[[trait_idx]],']'),
+         xlab='People',
+         ylab='Absolute difference')
+    lines(1:nrow(ordered_gt), ordered_gt[,trait_idx+1], col='black')
+    lines(1:nrow(ordered_gt), ordered_df[,pi_idx], col=color$c1)
+    lines(1:nrow(ordered_gt), ordered_df[,yark_idx], col=color$c2)
+    lines(1:nrow(ordered_gt), ordered_df[,golb_idx], col=color$c3)
+    # lines(1:nrow(ordered_gt), rep(0.62,nrow(ordered_gt)), col='black', lty=2)
+    # abline(v=c(250), lty=2)
+    legend(x="topleft", y=0.92, c('pi','yarkoni','golbeck'), col=c(color$c1, color$c2, color$c3), pch=rep('-',3), lwd=5)
+  }
+}
+difference_plot(data, gt)
+```
+
+```{r}
+data_cp <- data.frame(data)
+for (c in 2:16) {
+  data_cp[,c] <- (data_cp[,c] - mean(data_cp[,c]))
+}
+gt_cp <- data.frame(gt)
+for (c in 2:6) {
+  gt_cp[,c] <- (gt_cp[,c] - mean(gt_cp[,c]))
+}
+difference_plot(data_cp, gt_cp)
+```
+
+```{r}
+RMSE(data_cp, gt_cp)
+```
+
+
+### Check the metrics without the mean subtracted
+```{r}
+measure_plot(dfs=list(data), dfnames=list('data'), gt=gt, func=RMSE, main='RMSE normally')
+measure_plot(dfs=list(data_cp, data), dfnames=list('Yes', 'No'), gt=list(gt_cp,gt), func=MAE, main='MAE for mean centered and no mean centering scores.', truncate_columns = TRUE, show_legend=TRUE, legend_title='Mean centered', size_in_legend = FALSE, std=TRUE)
+measure_plot(dfs=list(data), dfnames=list('data'), gt=gt, func=max_AE, main='Max AE normally')
+```
+
+### Check the metrics with the mean subtracted.
+```{r}
+measure_plot(dfs=list(data_cp), dfnames=c('data'), gt=gt_cp, func=RMSE, main='RMSE with mean subtracted')
+measure_plot(dfs=list(data_cp), dfnames=c('data'), gt=gt_cp, func=MAE, main='MAE with mean subtracted')
+```
+
+```{r}
+abs_difference_plot(data_cp, gt_cp)
+```
+
+```{r}
+plotty <- function(df) {
+  trait_idx <- 1
+  
+  ordered_df <- df[order(df[,trait_idx+1]),]
+
+  plot(1:nrow(ordered_df), ordered_df[,trait_idx+1], type='n',
+     main=paste0('Ordered scores [',traits[[trait_idx]],']'),
+     xlab='People',
+     ylab='Score')
+  lines(x=1:nrow(ordered_df),y=ordered_df[,trait_idx+11], col=color$c2)
+  lines(x=1:nrow(ordered_df),y=ordered_df[,trait_idx+6], col=color$c1)
+  lines(x=1:nrow(ordered_df),y=ordered_df[,trait_idx+1], col=color$c3)
+
+  legend(x="topleft", y=0.92, c('golbeck','yarkoni','pi'), col=c(color$c1,color$c2,color$c3), pch=rep('-',3), lwd=5)
+}
+plotty(data)
+```
+
+```{r}
+show_confint <- function(df, gt) {
+  ae <- AE(df, gt)
+
+  out <- data.frame(matrix(ncol=15,nrow=2), stringsAsFactors = FALSE)
+  for (i in 2:15) {
+    std <- sd(ae[,i])
+    nfive <- std*0.95
+    nnine <- std*0.99
+    
+  }
+}
+show_confint(data,gt)
+```
+
+```{r}
+# Results borrowed from RQ4.Rmd.
+normal_cols = c(1,3,4,6:9,11,12,14)
+non_normal_cols = c(1,2,5,10,13,15,16)
+```
+
+```{r}
+data_gt <- data[data$id %in% gt$id,]
+gt <- gt[gt$id %in% data$id,]
+wilc_out <- wilc(data_gt, gt, p=0.05, paired=TRUE)
+wilc_out <- wilc_out[non_normal_cols-1,]
+latex_table(wilc_out, caption="", label="")
+wilc_out
+```
+
+```{r}
+ks_df <- ks_test(data, gt)
+ks_df
+```
+
+```{r}
+ttest_out <- ttest_eff(data_gt, gt, p=0.05, paired=TRUE)
+ttest_out <- ttest_out[normal_cols-1,]
+latex_table(ttest_out, caption="", label="")
+ttest_out
+```
+
+```{r}
+data_cp_gt <- data_cp[data_cp$id %in% gt_cp$id,]
+gt_cp_gt <- gt_cp[gt_cp$id %in% data_cp$id,]
+wilc(data_cp_gt, gt_cp_gt, p=0.05, paired=TRUE)[non_normal_cols-1,]
+ttest_eff(data_cp_gt, gt_cp_gt, p=0.05, paired=TRUE)[normal_cols-1,]
+```
+
+```{r, fig.width=9, fig.height=6}
+par(mfrow=c(5,4), oma=c(3,1,0,0), mar=c(2,2,1,0), mgp=c(3,1,0))
+for (i in 2:6) {
+  hist(data_cp_gt[,i], main=fix_column_name(colnames(data)[[i]]), col=color[[i]], xlab='Score')#, xlim=c(0,1.0), breaks=seq(0,1.0,by=0.1))
+  hist(data_cp_gt[,i+5], main=fix_column_name(colnames(data)[[i+5]]), col=color[[i]], xlab='Score')#, xlim=c(0,1.0), breaks=seq(0,1.0,by=0.1))
+  hist(data_cp_gt[,i+10], main=fix_column_name(colnames(data)[[i+10]]), col=color[[i]], xlab='Score')#, xlim=c(0,1.0), breaks=seq(0,1.0,by=0.1))
+  hist(gt_cp_gt[,i], main=paste('GT',gt_traits[i-1]), col=color[[i]], xlab='Score')#, xlim=c(0,1.0), breaks=seq(0,1.0,by=0.1))
+}
+```
+
+
+```{r}
+correlations_df <- function(df, correlation_method) {
+  
+  for (trait_idx in 1:5) {
+    out <- data.frame(matrix(ncol=3,nrow=3), stringsAsFactors = FALSE)
+    pi_idx <- trait_idx + 1
+    yark_idx <- trait_idx + 6
+    golb_idx <- trait_idx + 11
+    colnames(out) <- colnames(data)[c(pi_idx, yark_idx, golb_idx)]
+    row.names(out) <- colnames(out)
+    
+    out[1,2] <- cor.test(x=data[,pi_idx], data[,yark_idx], method=correlation_method)[["estimate"]]
+    out[1,3] <- cor.test(x=data[,pi_idx], data[,golb_idx], method=correlation_method)[["estimate"]]
+    out[2,3] <- cor.test(x=data[,yark_idx], data[,golb_idx], method=correlation_method)[["estimate"]]
+    out[1,1] <- "-"
+    out[2,2] <- "-"
+    out[3,3] <- "-"
+    out[2,1] <- out[1,2]
+    out[3,1] <- out[1,3]
+    out[3,2] <- out[2,3]
+    
+    print(out)
+  }
+}
+correlations_df(data, "kendall")
+```
+
+```{r}
+correlations_df(data, "pearson")
+```

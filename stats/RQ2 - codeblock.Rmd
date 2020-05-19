@@ -1,0 +1,171 @@
+---
+title: "Research Question 2 - codeblocks"
+author: "Frenk C.J. van Mil"
+output:
+  pdf_document: default
+  html_document:
+    df_print: paged
+  word_document: default
+---
+
+```{r, result='hide', echo=FALSE, include=FALSE}
+source('statistics.R')
+```
+
+```{r, results='hide', echo=FALSE, include=FALSE}
+transformations <- list(
+  c(13, log10_transform)
+)
+dbs_res <- readdbs('selected_dev_parsed', 'selected_dev_parsed_code', transformations=transformations)
+
+data_og <- dbs_res$db1
+data_cmp <- dbs_res$db2
+
+dfs <- list(data_og, data_cmp)
+dfnames = c('original', 'code')
+rm(dbs_res)
+```
+
+In order to evaluate research question 2, we need to connect to the MySQL database first. From the database we fetch to dataframes, _data\_og_ (scores with all preprocessing steps enabled) and _data\_cmp_ (scores without code block parsing). Any column indicating significance (signf) means a `p-value` below `0.05` is found.
+
+## Summarize data
+```{r}
+summarize_df(dfs, dfnames=dfnames, fix_naming=TRUE)
+```
+
+From the summary of above, we can see that some columns do not seem to be affected (much). For example, PI extraversion and neuroticism are not really affected by the parsing. However, all other columns of all methods seem to be affected at least some. We should check, however, if this is significant or not.
+
+Furthermore, by looking at the median and the mean, we can see that it seems that most column are not too skewed to one side. Therefore, normallity may be possible.
+
+First we check if there even is a difference in a single row and column.
+
+```{r}
+inspect_AE_differences(df1 = data_og, df2 = data_cmp)
+```
+
+From the above, we can see that the preprocessing step does have a large effect on some of the people. On average, it is not necessaryily much (although for Golbeck quite much), we see maximum differences of over 0.4. This is already enough to give an entirely different personality. More than half of the dataset for each trait is affected.
+
+```{r}
+latex_table(func=inspect_AE_differences, 
+            caption=paste("Differences in scores for PI with and without", dfnames[[2]], "parsing."),
+            label=paste0('tab:', dfnames[[2]],'_diff'),
+            include_index = TRUE,
+            fix_column = 0,
+            df1 = data_og, df2 = data_cmp)
+```
+
+
+First we will look if the distributions are normal or not. To visualize this, we draw histograms, density plots, and QQ-plots.
+
+```{r}
+hist_all(data_og, data_cmp)
+```
+```{r}
+density_all(data_og, data_cmp, name2='codeblocks')
+```
+
+
+```{r, cache=TRUE}
+draw_qqplots(data_og, data_cmp)
+```
+
+By looking at the QQ-plots, we can see that some appear at least near-normally distributed. However, most do not seem to be normally distributed.
+
+
+## Shapiro-Wilk Normality test
+To make check our findings of the QQ-plots, we could use Shapiro-Wilk normality testing to check if the traits are significantly non-normal.
+```{r}
+sample_size <- 50
+repeats <- 1000
+shap_og <- shap(data_og, sample_size=sample_size)
+print(shap_og)
+
+shap_cmp <- shap(data_cmp, sample_size=sample_size)
+print(shap_cmp)
+
+repeated(shap, repeats, data_og, sample_size) # Check if the p-values are most of the time right.
+repeated(shap, repeats, data_og, sample_size=sample_size) # Check if the p-values are most of the time right.
+```
+
+```{r}
+normal_cols <- c(1,3:11,15)
+non_normal_cols <- c(1,2,12:14,16)
+```
+
+From the above we can conclude that the data is significanlty different from a normal distribution for all columns.
+
+## Fisher test (compare variances)
+Before we can compare whether there is a difference in means, we first need to compare the variances.
+
+```{r}
+fisherf_df <- fisherf(data_og, data_cmp)
+fisherf_df
+```
+From the Fisher F test, we could find a significant different for all personality traits in the variance. We should keep in mind this may be caused by outliers. However, by looking at the illustrations, this does not necessarily seem to be the case. The larger the value F, the larger the difference in variance is.
+
+Because we have already done this test, it wouldn't be necessary to do tests for the difference in means.
+
+## Wilcox signed rank test with continuaty correction (paired = TRUE)
+```{r}
+wilc_df <- wilc(data_og[,non_normal_cols], data_cmp[,non_normal_cols], paired = TRUE)
+wilc_df
+```
+
+Because we found all columns to be significantly different from a normal distribution, we use the Wilcox rank sum test. The Wilcox rank sum test should show us under the hypothesis that the two means are the same. We assume that the pairing is needed, as the scores are drawn for the same person but with different parsing.
+For all columns, we reject the null hypothesis and conclude that the mean trait values for the original data and without code parsing are significantly different.
+
+## T-test
+```{r}
+ttest_df <- ttest(data_og[,normal_cols], data_cmp[,normal_cols])
+ttest_df
+```
+
+If the data would be normally distributed, we could also have used the t-test. However, we found earlier this is not the case.
+Still, if we execute the code, we can see there is not contradiction on all columns, except for `pi_extraversion`. This is not unexpected as the p-value for t-test is usually lower than the Wilcox ranked sum test p-value.
+From the above, we could have concluded that the means of the two sets of data are significantly different from each other for all personality traits.
+
+## Effect size mean - Cohen's d
+```{r}
+cohensd_df <- cohensd(data_og[,normal_cols], data_cmp[,normal_cols])
+cohensd_df
+```
+
+```{r}
+latex_table(func=wilc, caption=paste("Paired Wilcoxon signed-rank test between the original data and", dfnames[[2]],"parsing disabled."), label=paste0("tab:",dfnames[[2]],"_wilcox"), df1=data_og[,non_normal_cols], df2=data_cmp[,non_normal_cols], p=0.05, paired=TRUE)
+```
+
+
+```{r}
+latex_table(func=ttest_eff, caption=paste("Paired t-test and Cohen's d effect sizes between the original data and", dfnames[[2]],"parsing disabled."), label=paste0("tab:",dfnames[[2]],"_ttest"), df1=data_og[,normal_cols], df2=data_cmp[,normal_cols], p=0.05, paired=TRUE)
+```
+
+## Plots
+```{r}
+plot_line_ordered(data_og, data_cmp)
+```
+
+```{r}
+trait_boxplots(data_og, data_cmp)
+```
+
+
+```{r}
+ggplot_line_ordered(data_og, data_cmp)
+```
+
+```{r}
+gt <- get_ground_truth()
+
+insp <- inspect_gt_non_zero(data_og, data_cmp, dfnames=dfnames, gt=gt)
+insp
+```
+
+```{r}
+diff_cols <- get_diff_cols(insp)
+
+latex_table(inspect_gt, caption=paste("Difference in RMSE and MAE scores with the original dataset compared to the", dfnames[[2]],"dataset."), label=paste0("tab:",dfnames[[2]],"_gt_RMSE_MAE"), include_index=TRUE, fix_column=0, transpose=TRUE, df1=data_og, df2=data_cmp, dfnames=dfnames, gt=gt, columns=diff_cols)
+```
+
+```{r}
+measure_plot(dfs=list(data, data_cmp), dfnames=list('og', 'cmp'), gt=gt, func=MAE, main='MAE for original scores compared to code block scores.', truncate_columns = TRUE, show_legend=TRUE, legend_title='Dataset', size_in_legend = FALSE)
+```

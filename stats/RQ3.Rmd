@@ -1,0 +1,458 @@
+---
+title: "Research Question 3"
+author: "Frenk C.J. van Mil"
+output:
+  pdf_document: default
+  html_document:
+    df_print: paged
+  word_document: default
+---
+
+```{r, result='hide', echo=FALSE, include=FALSE}
+source('statistics.R')
+knitr::opts_chunk$set(comment = NA)
+knitr::opts_chunk$set(results = 'asis')
+```
+
+### Read in data
+```{r, results='hide', echo=FALSE, include=FALSE}
+transformations <- list(
+  c(13, log10_transform)
+)
+dbs_res1 <- readdbs('selected_dev_parsed_rq3_3000', 'selected_dev_parsed_rq3_1200', transformations = transformations)
+dbs_res2 <- readdbs('selected_dev_parsed_rq3_600', 'selected_dev_parsed_rq3_100', transformations = transformations)
+
+data_full <- read_single_db('selected_dev_parsed', transformations=transformations)
+
+data_3000 <- dbs_res1$db1
+data_1200 <- dbs_res1$db2
+data_600 <- dbs_res2$db1
+data_100 <- dbs_res2$db2
+
+rm(dbs_res1)
+rm(dbs_res2)
+
+data_3000 <- data_3000[(data_3000$id %in% data_100$id),]
+data_1200 <- data_1200[(data_1200$id %in% data_100$id),]
+
+dfs <- list(data_100, data_600, data_1200, data_3000)
+dfnames=list('[100]','[600]', '[1200]', '[3000>')
+```
+First we read in the data and save this to four different datasets: data_3000 (comments with >3000 words), data_1200 (comments truncated to 1200 words), data_600 (comments truncated to 6000 words), and data_100 (comments truncated to 100 words).
+
+```{r}
+summarize_df(dfs, dfnames=dfnames)
+```
+
+### Compare density plots
+```{r}
+cols <- colnames(data_3000)
+for (i in 2:length(cols)) {
+  column <- cols[i]
+  density3000 <- density(data_3000[,i])
+  density1200 <- density(data_1200[,i])
+  density600 <- density(data_600[,i])
+  density100 <- density(data_100[,i])
+  maximum <- max(max(max(density3000[['y']]),max(density1200[['y']])),max(max(density600[['y']]),max(density100[['y']])))
+  plot(density3000, main=paste('Density plot',column), col=color$c_sc1, ylim=c(0,maximum))
+  lines(density1200, col=color$c_sc2)
+  lines(density600, col=color$c_sc3)
+  lines(density100, col=color$c_sc4)
+  legend(x="topright", y=0.92, legend=dfnames, col=c(color$c_sc1,color$c_sc2,color$c_sc3,color$c_sc4), pch=rep('-',length(dfnames)), lwd=10)
+}
+```
+
+```{r}
+get_ylim <- function(dfs, column) {
+  ylim_lower <- 1
+  ylim_upper <- 0
+  for (df in dfs) {
+    lowerq <- quantile(df[,column])[2]
+    upperq <- quantile(df[,column])[4]
+    iqr <- upperq - lowerq
+    ylim_lower <- min(lowerq - (iqr*1.5),ylim_lower)
+    ylim_upper <- max((iqr*1.5) + upperq,ylim_upper)
+  }
+  return(c(ylim_lower,ylim_upper))
+}
+```
+
+```{r}
+outline = FALSE
+for (i in 2:length(cols)) {
+  column <- cols[i]
+  at_pos <- c(0.25,0.75,1.25,1.75)
+  
+  boxplot(data_100[,i], xlim=c(0,2), ylim=get_ylim(dfs,i), at=at_pos[1], main=paste('Boxplots',column), col=color$c_sc4, outline=outline)
+  boxplot(data_600[,i], add=TRUE, at=at_pos[2], col=color$c_sc3, outline=outline)
+  boxplot(data_1200[,i], add=TRUE, at=at_pos[3], col=color$c_sc2, outline=outline)
+  boxplot(data_3000[,i], add=TRUE, at=at_pos[4], col=color$c_sc1, outline=outline)
+  axis(1, 1:length(dfnames), labels=dfnames, at=at_pos)
+}
+```
+
+```{r}
+variances_rq3 <- function() {
+  for (column in 2:length(data_3000)) {
+    print(paste0(colnames(data_3000)[column], ":"))
+    cat(paste("\tVariance [100]:", round(var(data_100[,column]),3),
+              "\n\tVariance [600]:", round(var(data_600[,column]),3),
+              "\n\tVariance [1200]:", round(var(data_1200[,column]),3),
+              "\n\tVariance [3000]:", round(var(data_3000[,column]),3),
+              "\n")
+        )
+  }
+}
+variances_rq3()
+```
+```{r}
+repeated_shap_rq3 <- function() {
+  iterations = 1000
+  sample_size = 50
+  p = 0.05
+  
+  print('Data [100]')
+  repeated(shap, n=iterations, df=data_100, sample_size=sample_size, p=p)
+  print('Data [600]')
+  repeated(shap, n=iterations, df=data_600, sample_size=sample_size, p=p)
+  print('Data [1200]')
+  repeated(shap, n=iterations, df=data_1200, sample_size=sample_size, p=p)
+  print('Data [3000]')
+  repeated(shap, n=iterations, df=data_3000, sample_size=sample_size, p=p)
+}
+repeated_shap_rq3()
+```
+```{r}
+normal_cols <- c(1,3:5,7:9,11,13:15)
+non_normal_cols <- c(1,2,6,10,12,16)
+```
+
+
+### Normality with QQ-Plots
+```{r}
+draw_qqplots_rq3 <- function(dfs, dfnames) {
+  for (i in 1:length(dfs)) {
+    df <- dfs[[i]]
+    for (column in 2:length(df)) {
+      qqnorm(df[,column], pch=1, frame=FALSE, main = paste0(dfnames[[i]],": ",colnames(df)[[column]]))
+      qqline(df[,column], col="steelblue", lwd=2)
+    }
+  }
+}
+draw_qqplots_rq3(dfs, dfnames)
+```
+
+```{r}
+# Textually describe the dataframes.
+summarize_df_rq3 <- function(df1, df2, df3, df4, dfnames=c(NULL,NULL,NULL,NULL)) {
+  
+  summ_df <- data.frame(Df=character(),
+                        Column=character(), 
+                        Min=double(), 
+                        '1st Qu.'=double(), 
+                        Median=double(), 
+                        Mean=double(), 
+                        '3rd Qu.'=double(), 
+                        Max=double(), 
+                        stringsAsFactors = FALSE)
+  
+  summarize_col <- function(in_df, i, res_df, dfname) {
+    dfname <- ifelse(is.null(dfname), deparse(substitute(in_df)), dfname)
+    res <- summary(in_df[,i])
+    res_df[nrow(res_df)+1, ] <- c(dfname,
+                                  colnames(in_df)[i],
+                                  round(res['Min.'],2),
+                                  round(res['1st Qu.'],2), 
+                                  round(res['Median'],2),
+                                  round(res['Mean'],2),
+                                  round(res['3rd Qu.'],2),
+                                  round(res['Max.'],2))
+    res_df
+  }
+  for (i in 2:length(colnames(df1))) {
+    summ_df <- summarize_col(df1, i, summ_df, dfnames[1])
+    summ_df <- summarize_col(df2, i, summ_df, dfnames[2])
+    summ_df <- summarize_col(df3, i, summ_df, dfnames[3])
+    summ_df <- summarize_col(df4, i, summ_df, dfnames[4])
+  }
+  summ_df
+}
+
+## Summarize data
+summarize_df_rq3(data_100, data_600, data_1200, data_3000)
+```
+
+### Fisher F test to compare two variances.
+```{r}
+## Compare Fisher-F test for all dataframes.
+compare(fisherf, dfs=dfs, dfnames=dfnames, p=0.05)
+```
+
+### Wilcox signed-rank test.
+```{r}
+## Compare Wilc signed-rank test for all dataframes.
+compare(wilc, dfs=dfs, dfnames=dfnames, paired=TRUE, p=0.05, columns=non_normal_cols)
+```
+
+### T-test.
+```{r}
+## Compare Wilc signed-rank test for all dataframes.
+compare(ttest, dfs=dfs, dfnames=dfnames, paired=TRUE, p=0.05, columns=normal_cols)
+```
+
+### Cohen's d.
+```{r}
+## Compare Wilc signed-rank test for all dataframes.
+compare(cohensd, dfs=dfs, dfnames=dfnames, columns=normal_cols)
+```
+
+# Ground-truth inspection
+```{r}
+gt <- get_ground_truth()
+traits = c('Openness', 'Conscientiousness', 'Extraversion', 'Agreeableness', 'Neuroticism')
+```
+
+```{r}
+# Get the squared-error.
+SE(data_100, gt)
+```
+```{r}
+# Get the Mean-quared-error.
+MSE(data_100, gt)
+```
+
+```{r}
+# Get the Root-mean-squared-error, which is NRMSE (normalized) at the same time due to 0-1 scaling!
+RMSE(data_100, gt)
+```
+
+```{r}
+# Get the Mean-Absolute-Error.
+MAE(data_100, gt)
+```
+
+
+```{r}
+# Check the RMSE on each personality trait.
+measure_plot(dfs=dfs, dfnames=dfnames, gt=gt, func=RMSE, std=0.95)
+```
+
+```{r}
+# Check the MAE on each personality trait.
+measure_plot(dfs=dfs, dfnames=dfnames, gt=gt, func=MAE)
+```
+
+```{r}
+# Check the maximum absolute error on each personality trait.
+measure_plot(dfs=dfs, dfnames=dfnames, gt=gt, func=max_AE)
+```
+
+```{r}
+scatter <- function(df, gt, default_scaling=TRUE) {
+  for (i in 2:16) {
+    trait_idx <- (i - 2) %% 5 + 1
+    trait <- traits[[trait_idx]]
+    df.m <- merge(df, gt, by="id")
+    p <- ggplot() + 
+      geom_point(data=df.m, aes(x=df.m[,i], y=df.m[,(trait_idx+16)])) +
+      geom_abline(intercept = 0, slope = 1) +
+      ggtitle(paste(colnames(df.m)[i], 'vs', colnames(df.m)[trait_idx+16])) +
+      xlab(colnames(df.m)[i]) + ylab(colnames(df.m)[trait_idx+16])
+    if (default_scaling) {
+      p <- p + scale_x_continuous(limits=c(0, 1), breaks=unlist(lapply(c(1:10), FUN=function(x) x/10))) +
+        scale_y_continuous(limits=c(0, 1), breaks=unlist(lapply(c(1:10), FUN=function(x) x/10)))
+    }
+    print(p)
+  }
+}
+scatter(data_100, gt)
+```
+
+```{r}
+scatter(data_600, gt)
+```
+
+```{r}
+scatter(data_1200, gt)
+```
+
+```{r}
+scatter(data_3000, gt)
+```
+
+```{r}
+centralize <- function(df, columns, rounding=2) {
+  df.mean <- data.frame(df[,1:tail(columns,1)])
+  df.mean[,columns] <- df.mean[,columns] - colMeans(df.mean[,columns])
+  if (rounding > -1) {
+    df.mean[,columns] <- round(df.mean[,columns], rounding)
+  }
+  return(df.mean)
+}
+scatter(centralize(data_100, columns=c(2:16)), centralize(gt, columns=c(2:6)), default_scaling = FALSE)
+```
+
+```{r}
+fifty_quantile <- quantile(gt$word_count, .5)[['50%']]
+small_gt <- data.frame(gt[gt[,"word_count"] < fifty_quantile,])
+large_gt <- gt[gt[,"word_count"] >= fifty_quantile,]
+
+# Check the RMSE on each personality trait.
+measure_plot_gts(df=data_full, dfnames=c('<50%','>50%'), gts=list(small_gt,large_gt), func=RMSE)
+measure_plot_gts(df=data_full, dfnames=c('<50%','>50%'), gts=list(small_gt,large_gt), func=MAE)
+```
+
+Now lets try the same but set the limit to 600.
+```{r}
+fifty_quantile <- 600
+small_gt <- data.frame(gt[gt[,"word_count"] < fifty_quantile,])
+large_gt <- gt[gt[,"word_count"] >= fifty_quantile,]
+
+# Check the RMSE on each personality trait.
+measure_plot_gts(df=data_full, dfnames=c('<50%','>50%'), gts=list(small_gt,large_gt), func=RMSE)
+measure_plot_gts(df=data_full, dfnames=c('<50%','>50%'), gts=list(small_gt,large_gt), func=MAE)
+```
+
+```{r}
+abs_difference_plot <- function(df1, df2, gt) {
+  ae1 <- AE(df1, gt)
+  ae2 <- AE(df2, gt)
+  for (trait_idx in 1:5) {
+    pi_idx <- trait_idx + 1
+    yark_idx <- trait_idx + 6
+    golb_idx <- trait_idx + 11
+    
+    plot(1:nrow(ae1), sort(ae1[,pi_idx]), type='n',
+         main=paste0('Absolute differences sorted [',traits[[trait_idx]],']'),
+         xlab='People',
+         ylab='Absolute difference')
+    lines(1:nrow(ae1), sort(ae1[,pi_idx]), col=color$c1)
+    lines(1:nrow(ae1), sort(ae1[,yark_idx]), col=color$c2)
+    lines(1:nrow(ae1), sort(ae1[,golb_idx]), col=color$c3)
+    lines(1:nrow(ae2), sort(ae2[,pi_idx]), col=color$c1, lty=2)
+    lines(1:nrow(ae2), sort(ae2[,yark_idx]), col=color$c2, lty=2)
+    lines(1:nrow(ae2), sort(ae2[,golb_idx]), col=color$c3, lty=2)
+    legend(x="topleft", y=0.92, 
+           c('PI','Yarkoni','Golbeck', 'df1', 'df2'),
+           col=c(color$c1,color$c2,color$c3,'black','black'),
+           pch=rep('-',5), lwd=4, lty=c(rep(1,4),3))
+  }
+}
+abs_difference_plot(data_100, data_1200, gt)
+```
+```{r}
+abs_difference_plot(data_100, data_600, gt)
+```
+
+```{r}
+abs_difference_plot(data_1200, data_3000, gt)
+```
+
+```{r}
+method_words_plot <- function(dfs, dfnames, gt, method) {
+  aes <- list()
+  for (df in dfs) {
+    aes[[length(aes) + 1]] <- AE(df, gt)
+  }
+
+  if (method == "PI") {
+    method_idx <- 1
+  } else if (method == "Yarkoni") {
+    method_idx <- 6
+  } else if(method == "Golbeck") {
+    method_idx <- 11
+  }
+  
+  for (trait_idx in 1:5) {
+    idx <- trait_idx + method_idx
+    
+    plot(1:nrow(aes[[1]]), sort(aes[[1]][,idx]), type='n',
+         main=paste0(method,' - Absolute differences sorted [',traits[[trait_idx]],']'),
+         xlab='People',
+         ylab='Absolute difference')
+    for (df_i in 1:length(dfs)) {
+      nrows <- nrow(aes[[df_i]])
+      lines(1:nrow(aes[[df_i]]), sort(aes[[df_i]][,idx]), col=color[[df_i]])
+    }
+    legend(x="topleft", y=0.92, dfnames, col=colors(1:length(dfs)), pch=rep('-',length(dfs)), lwd=4)
+  }
+
+}
+method_words_plot(dfs, dfnames, gt, method="PI")
+```
+
+```{r}
+method_words_plot(dfs, dfnames, gt, method="Yarkoni")
+```
+
+```{r}
+method_words_plot(dfs, dfnames, gt, method="Golbeck")
+```
+
+```{r}
+difference_plot <- function(df, gt) {
+  df <- df[df$id %in% gt$id,]
+  gt <- gt[gt$id %in% df$id,]
+  
+  merged <- merge(df, gt[1:6], by="id")
+  for (i in 1:5) {
+    pi_idx <- i + 1
+    yark_idx <- i + 6
+    golb_idx <- i + 11
+    gt_idx <- i + 16
+    
+    ordered_merged <- merged[order(merged[,gt_idx], merged[,pi_idx], merged[,yark_idx], merged[,golb_idx]),]
+
+    plot(1:nrow(ordered_merged), ordered_merged[,gt_idx], type='n',
+         main=paste0('Ordered scores [',traits[[i]],']'),
+         xlab='People',
+         ylab='Absolute difference')
+    lines(1:nrow(ordered_merged), ordered_merged[,gt_idx], col='black')
+    lines(1:nrow(ordered_merged), ordered_merged[,pi_idx], col=alphcolor('c1',0.8))
+    lines(1:nrow(ordered_merged), ordered_merged[,yark_idx], col=alphcolor('c2',0.8))
+    lines(1:nrow(ordered_merged), ordered_merged[,golb_idx], col=alphcolor('c3',0.8))
+    legend(x="topleft", y=0.92, c('gt','pi','yarkoni','golbeck'), col=c('black', colors(1:3)), pch=rep('-',3), lwd=5)
+  }
+}
+difference_plot(data_full, gt)
+```
+
+```{r}
+difference_plot(round(data_full,1), round(gt[1:6],1))
+```
+
+```{r}
+difference_plot2 <- function(df, gt) {
+  df <- df[df$id %in% gt$id,]
+  gt <- gt[gt$id %in% df$id,]
+  for (trait_idx in 1:5) {
+    pi_idx <- trait_idx + 1
+    yark_idx <- trait_idx + 6
+    golb_idx <- trait_idx + 11
+    
+    ordered_df <- normalize_data(df[order(df[,trait_idx+1]),])
+    
+    plot(1:nrow(ordered_df), ordered_df[,pi_idx], type='n',
+         main=paste0('Ordered scores [',traits[[trait_idx]],']'),
+         xlab='People',
+         ylab='Absolute difference')
+    lines(1:nrow(ordered_df), ordered_df[,pi_idx], col=alphcolor('c1',0.8))
+    lines(1:nrow(ordered_df), ordered_df[,yark_idx], col=alphcolor('c2',0.8))
+    lines(1:nrow(ordered_df), ordered_df[,golb_idx], col=alphcolor('c3',0.8))
+    legend(x="topleft", y=0.92, c('pi','yarkoni','golbeck'), col=c(color$c1, color$c2, color$c3), pch=rep('-',3), lwd=5)
+    break
+  }
+}
+difference_plot2(data_full, gt)
+```
+
+```{r}
+data_freqfilt <- read_single_db('selected_dev_parsed_frequency', transformations=transformations)
+```
+
+```{r}
+# Check the RMSE on each personality trait.
+measure_plot(dfs=list(data_full,data_freqfilt), dfnames=c('normal','freq'), gt=gt, func=RMSE)
+measure_plot(dfs=list(data_full,data_freqfilt), dfnames=c('normal','freq'), gt=gt, func=MAE)
+```
+

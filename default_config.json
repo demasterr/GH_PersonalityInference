@@ -1,0 +1,28 @@
+{
+  "user": "#USER#",
+  "host": "#HOST#",
+  "database": "#DATABASE#",
+  "raise_on_warnings": true,
+  "max_users": -1,
+  "step": "Preprocess",
+  "minimum_words": 100,
+  "significance": 0.05,
+  "base_table": "",
+  "table": "#TABLE#",
+  "truncate": 100000000,
+  "frequency_file": "",
+  "filter": [],
+  "stemming": false,
+  "chunk_size": 150,
+  "threads": 3,
+  "quick_tables": ["lowercase", "code", "hashtags", "emails", "at", "ip", "url", "numbers", "whitespace", "double_whitespace", "space_punctuation", "images"],
+  "liwc_versions": [
+    {
+      "author": "yarkoni",
+      "version": 2001
+    }, {
+      "author": "golbeck",
+      "version": 2007
+    }
+  ]
+}

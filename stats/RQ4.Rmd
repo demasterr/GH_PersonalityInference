@@ -1,0 +1,1052 @@
+---
+title: "Research Question 4"
+author: "Frenk C.J. van Mil"
+output:
+  pdf_document: default
+  html_document:
+    df_print: paged
+  word_document: default
+---
+
+```{r, result='hide', echo=FALSE, include=FALSE}
+source('statistics.R')
+source('rq4.R')
+
+dbname <- 'selected_dev_parsed'
+```
+
+### Read the data
+```{r, results='hide', echo=FALSE, include=FALSE}
+transformations <- list(
+  c(13, log10_transform)
+)
+# Read the database values
+data <- read_single_db(dbname, normalize=TRUE, transformations=transformations, raw=TRUE)
+
+# Read the participants.
+participants <- readcsv('../data/final_participants.csv')
+
+detach('package:dplyr', unload=TRUE)
+library(dplyr)
+EPI <- participants %>% select(id, EPI) %>% filter(EPI != 'Unknown')
+EPI <- merge(EPI, data, by="id")
+epi_order <- c("Very low", "Low", "Moderate", "High", "Very high")
+EPI$EPI <- factor(EPI$EPI, levels=epi_order)
+EPI <- EPI[order(EPI$EPI),]
+EPI
+```
+
+### Box plots
+```{r warning=FALSE}
+# Suppressed warning for removed NA values.
+boxplots_rq4()
+```
+
+### Density plots
+```{r}
+density_rq4()
+```
+
+```{r}
+repeated_shap_rq4_epi()
+```
+
+We now check for normality with Shapiro-Wilk. The values reported above are for the Very low, Low, Moderate, High, and Very high EPI. '2 FALSE : 692' means that for column 2 (pi_openness) 692 FALSE was given for p<0.05 (and 308 times TRUE). In this case we would conclude normality, as there is no significance for non-normality. Columns start from 2 to 16 with OCEAN ordered Big Five traits in the order of PI, Yarkoni, and Golbeck.
+
+```{r}
+normal_cols <- c(1,3:15)
+non_normal_cols <- c(1,2,16)
+```
+
+### Show the variances of the different methods for each EPI level
+```{r}
+variances_rq4()
+```
+
+In the figure, we can see that PI has more variance than Yarkoni, and Yarkoni has more variance than Golbeck. We can also observe a slight decrease in variance from 'Very low' to 'Very high' EPI.
+
+```{r}
+dfs <- get_seperate_lists(EPI, 2, epi_order)
+```
+
+## Check for a difference in means with Wilcoxon signed-rank test.
+```{r}
+compare(func=wilc, dfs=dfs, dfnames=epi_order, columns=non_normal_cols, paired=FALSE, p=0.05)
+```
+
+## Check for a difference in means with t-test.
+```{r}
+compare(ttest, dfs, dfnames=epi_order, columns=normal_cols, paired=FALSE, p=0.05)
+```
+
+## Check for effect size in means with Cohen's d.
+```{r}
+compare(cohensd, dfs, dfnames=epi_order, columns=normal_cols, paired=FALSE)
+```
+
+
+## Check for a difference in variance with Fisher F-test.
+```{r}
+compare(fisherf, dfs, dfnames=epi_order, p=0.05)
+```
+
+```{r}
+gt <- get_ground_truth()
+gt <- gt[order(gt$id),]
+row.names(gt) <- NULL
+ggplot(gt, aes(x=Fluent)) + geom_bar()
+ggplot(gt, aes(x=Mothertongue)) + geom_bar()
+ggplot(gt, aes(x=fct_infreq(Country))) + geom_bar() + theme(axis.text.x = element_text(angle = 90,hjust=0.95))
+```
+```{r}
+gt$continent <- countrycode(sourcevar = gt[, 'Country'],
+                            origin = "country.name",
+                            destination = "region")
+ggplot(gt, aes(x=fct_infreq(continent))) + geom_bar() + theme(axis.text.x = element_text(angle = 90,hjust=0.95))
+```
+
+```{r}
+map_continent <- function(row) {
+  continent <- row[[16]]
+  # America
+  if (continent == 'Northern America') {
+    return('America')
+  }
+  if (continent == 'South America') {
+    return('America')
+  }
+  if (continent == 'Central America') {
+    return('America')
+  }
+  # Europe
+  if (continent == 'Eastern Europe') {
+    return('Europe')
+  }
+  if (continent == 'Western Europe') {
+    return('Europe')
+  }
+  if (continent == 'Northern Europe') {
+    return('Europe')
+  }
+  if (continent == 'Southern Europe') {
+    return('Europe')
+  }
+  # Asia
+  if (continent == 'Northern Asia') {
+    return('Asia')
+  }
+  if (continent == 'Southern Asia') {
+    return('Asia')
+  }
+  if (continent == 'Eastern Asia') {
+    return('Asia')
+  }
+  if (continent == 'Western Asia') {
+    return('Asia')
+  }
+  if (continent == 'South-Eastern Asia') {
+    return('Asia')
+  }
+  if (continent == 'Central Asia') {
+    return('Asia')
+  }
+  # Africa
+  if (continent == 'Northern Africa') {
+    return('Africa')
+  }
+  if (continent == 'Southern Africa') {
+    return('Africa')
+  }
+  if (continent == 'Middle Africa') {
+    return('Africa')
+  }
+  if (continent == 'Western Africa') {
+    return('Africa')
+  }
+  if (continent == 'Eastern Africa') {
+    return('Africa')
+  }
+  # Oceania
+  if (continent == 'Australia and New Zealand') {
+    return('Oceania')
+  }
+  return('Else')
+}
+gt$Continent_mapped <- apply(gt, 1, FUN=map_continent)
+gt
+```
+
+```{r}
+print(gt[gt['Continent_mapped'] == 'Else',])
+ggplot(gt, aes(x=fct_infreq(Continent_mapped))) + geom_bar() + theme(axis.text.x = element_text(angle = 90,hjust=0.95))
+```
+
+```{r}
+print_means_feature_continent_mapped <- function(df, gt, feature) {
+  feature_idx <- get_feature_idx(gt, feature)
+  gt_feature_yes <- subset(gt, gt[,feature_idx] == "Yes")
+  gt_feature_no <- subset(gt, gt[,feature_idx] == "No")
+  df_merge_yes <- merge(gt_feature_yes, df)
+  df_merge_no <- merge(gt_feature_no, df)
+  dfnames <- c(paste(feature, 'Yes'),paste(feature,'No'))
+  x <- 1
+  for (df_ in list(df_merge_yes,df_merge_no)) {
+    feature_idx <- get_feature_idx(df_,'pi_openness') - 1
+    for (i in feature_idx:(feature_idx + 14)) {
+      means <- df_ %>% group_by(Continent_mapped) %>% summarise_at(i, mean) %>% mutate_if(is.numeric, round, 2)
+      print(means)
+    }
+    x <- x + 1
+  }
+  
+  for (i in 2:6) {
+    means <- gt %>% group_by(Continent_mapped) %>% summarise_at(i, mean) %>% mutate_if(is.numeric, round, 2)
+    print(means)
+  }
+}
+print_means_feature_continent_mapped(data, gt, feature='Fluent')
+```
+
+```{r}
+print_means_feature_continent <- function(df, gt, feature) {
+  feature_idx <- get_feature_idx(gt, feature)
+  gt_feature_yes <- subset(gt, gt[,feature_idx] == "Yes")
+  gt_feature_no <- subset(gt, gt[,feature_idx] == "No")
+  df_merge_yes <- merge(gt_feature_yes, df)
+  df_merge_no <- merge(gt_feature_no, df)
+  dfnames <- c(paste(feature, 'Yes'),paste(feature,'No'))
+  x <- 1
+  for (df_ in list(df_merge_yes,df_merge_no)) {
+    feature_idx <- get_feature_idx(df_,'pi_openness') - 1
+    for (i in feature_idx:(feature_idx + 14)) {
+      means <- df_ %>% group_by(continent) %>% summarise_at(i, mean) %>% mutate_if(is.numeric, round, 2)
+      print(means)
+    }
+    x <- x + 1
+  }
+  
+  for (i in 2:6) {
+    means <- gt %>% group_by(continent) %>% summarise_at(i, mean) %>% mutate_if(is.numeric, round, 2)
+    print(means)
+  }
+}
+print_means_feature_continent(data, gt, feature='Fluent')
+```
+
+```{r}
+grouped_count <- gt %>% group_by(Continent_mapped) %>% count(Fluent) # %>% mutate_if(is.numeric, round, 2)
+grouped_count <- grouped_count[grouped_count$Fluent != 'Maybe',]
+print(grouped_count)
+ggplot(grouped_count, aes(x=fct_infreq(Continent_mapped))) + geom_bar() + theme(axis.text.x = element_text(angle = 90,hjust=0.95))
+```
+
+## Check for density distribution of 'Mothertongue'
+```{r}
+for (trait in 2:6) {
+  p <- ggplot() + geom_density(data=gt, aes(x=gt[,trait], group=Mothertongue, fill=Mothertongue), alpha=0.5, adjust=1) +
+    xlab(traits[[trait - 1]])
+  print(p)
+}
+```
+
+## Check for density distribution of 'Fluent'
+```{r}
+for (trait in 2:6) {
+  p <- ggplot() + geom_density(data=gt, aes(x=gt[,trait], group=Fluent, fill=Fluent), alpha=0.5, adjust=1) +
+    xlab(traits[[trait - 1]])
+  print(p)
+}
+```
+
+## Check for performance on 'Mothertongue'
+```{r}
+yes_gt <- subset(gt, Mothertongue == 'Yes')
+no_gt <- subset(gt, Mothertongue == 'No')
+
+measure_plot_gts(df=data, dfnames=c('Yes','No'), gts=list(yes_gt,no_gt), func=RMSE, main="Mothertongue - RMSE")
+measure_plot_gts(df=data, dfnames=c('Yes','No'), gts=list(yes_gt,no_gt), func=MAE, main="Mothertongue - MAE")
+```
+
+## Check for performance on 'Fluent'
+```{r}
+yes_gt <- subset(gt, Fluent == 'Yes')
+no_gt <- subset(gt, Fluent == 'No')
+maybe_gt <- subset(gt, Fluent == 'Maybe')
+
+measure_plot_gts(df=data, dfnames=c('Yes','Maybe','No'), gts=list(yes_gt,maybe_gt,no_gt), func=RMSE, main="RMSE - Fluency")
+measure_plot_gts(df=data, dfnames=c('Yes','Maybe','No'), gts=list(yes_gt,maybe_gt,no_gt), func=MAE, main="RMSE - Fluency")
+```
+
+```{r}
+yes_gt <- subset(gt, Fluent == 'Yes')
+no_gt <- subset(gt, Fluent == 'No')
+
+yes_rmse <- NULL
+yes_mae <- NULL
+
+iterations <- 1000
+for (i in 1:iterations) {
+  yes_gt_sampled <- yes_gt[sample(nrow(yes_gt),nrow(no_gt)),]
+
+  rmse <- RMSE(data, gt=yes_gt_sampled)
+  mae <- MAE(data, gt=yes_gt_sampled)
+  if (is.null(yes_rmse)) {
+    yes_rmse <- rmse
+    yes_mae <- mae
+  } else {
+    yes_rmse <- yes_rmse + rmse
+    yes_mae <- yes_mae + mae
+  }
+}
+yes_rmse <- round(yes_rmse / iterations, 2)
+yes_mae <- round(yes_mae / iterations, 2)
+```
+
+```{r}
+yes_rmse$size <- as.factor(paste0('Yes',' (',nrow(yes_gt),')'))
+yes_mae$size <- as.factor(paste0('Yes',' (',nrow(yes_gt),')'))
+no_rmse <- round(RMSE(data, gt=no_gt), 2)
+no_mae <- round(MAE(data, gt=no_gt), 2)
+no_rmse$size <- as.factor(paste0('No',' (',nrow(no_gt),')'))
+no_mae$size <- as.factor(paste0('No',' (',nrow(no_gt),')'))
+
+out_rmse <- rbind(yes_rmse,no_rmse)
+out_mae <- rbind(yes_mae,no_mae)
+
+colnames(out_rmse)[1:15] <- lapply(colnames(out_rmse)[1:15],fix_column_name)
+colnames(out_mae)[1:15] <- lapply(colnames(out_mae)[1:15],fix_column_name)
+
+plot_metric_bars(out_rmse, cn=colnames(out_rmse)[1:15], ylab="RMSE", main="RMSE - Sampled Fluency (1000)")
+plot_metric_bars(out_mae, cn=colnames(out_rmse)[1:15], ylab="MAE", main="MAE - Sampled Fluency (1000)")
+```
+
+```{r}
+no_gt_copy <- data.frame(no_gt)
+merged_df_no_fluent <- merge(data, no_gt_copy)
+no_gt_oversampled_merged <- merged_df_no_fluent[sample(nrow(merged_df_no_fluent),219, replace=TRUE),]
+row.names(no_gt_oversampled_merged) <- NULL
+
+no_df_oversampled <- no_gt_oversampled_merged[c(1:16)]
+no_gt_oversampled <- no_gt_oversampled_merged[c(1,17:length(no_gt_oversampled_merged))]
+
+df_oversampled <- rbind(no_df_oversampled, data[data$id %in% yes_gt$id,])
+row.names(df_oversampled) <- NULL
+
+print(rbind(MAE(df_oversampled, yes_gt), MAE(df_oversampled, no_gt_oversampled)))
+print(rbind(RMSE(df_oversampled, yes_gt), RMSE(df_oversampled, no_gt_oversampled)))
+measure_plot_gts(df=df_oversampled,
+                 dfnames=c('Yes', 'No'),
+                 gts=list(yes_gt, no_gt_oversampled),
+                 func=MAE,
+                 feature='Fluent',
+                 main="MAE on fluency with oversampling on the No-group")
+```
+
+# Wilc and t-test with oversampling on No-group.
+```{r}
+# gt_fluent_oversampled_no_maybe <- rbind(no_gt_oversampled, yes_gt)
+# row.names(gt_fluent_oversampled_no_maybe) <- NULL
+# print(gt_fluent_oversampled_no_maybe)
+# print(df_oversampled)
+# wilc_out_oversampled <- wilc_gt(df_oversampled, gt_fluent_no_maybe, feature="Fluent")
+# wilc_out_oversampled
+```
+
+All Fluency 'Yes' worse than 'No' for PI.
+No consitency Yarkoni. Even or two times 'Yes' worse.
+All Fluency 'No' worse than 'Yes' for Golbeck.
+
+## Check for the number of people in each EPI category.
+```{r}
+gt <- gt %>% mutate(EPI = factor(EPI, levels=epi_order))
+
+ggplot(gt, aes(x=ordered(EPI))) + geom_bar() + theme(axis.text.x = element_text(angle = 90,hjust=0.95))
+```
+
+## Check for the number of people in each EPI category when merged.
+```{r}
+merged_epi_order <- c("Low", "Moderate", "High")
+
+gt$merged_EPI <- gt$EPI
+gt$merged_EPI[gt$merged_EPI == "Very low"] <- "Low"
+gt$merged_EPI[gt$merged_EPI == "Very high"] <- "High"
+
+gt <- gt %>% mutate(merged_EPI = factor(merged_EPI, levels=merged_epi_order))
+
+ggplot(gt, aes(x=ordered(merged_EPI))) + geom_bar() + theme(axis.text.x = element_text(angle = 90,hjust=0.95))
+```
+
+## Check for performance on 'EPI' when merged.
+```{r}
+verylow_gt <- subset(gt, EPI == 'Very low')
+low_gt <- subset(gt, EPI == 'Low')
+moderate_gt <- subset(gt, EPI == 'Moderate')
+high_gt <- subset(gt, EPI == 'High')
+veryhigh_gt <- subset(gt, EPI == 'Very high')
+
+
+measure_plot_gts(df=data, dfnames=epi_order, gts=list(verylow_gt,low_gt,moderate_gt,high_gt,veryhigh_gt), func=RMSE)
+measure_plot_gts(df=data, dfnames=epi_order, gts=list(verylow_gt,low_gt,moderate_gt,high_gt,veryhigh_gt), func=MAE)
+```
+
+## Check for performance on 'EPI' when merged.
+```{r}
+low_gt <- subset(gt, merged_EPI == 'Low')
+moderate_gt <- subset(gt, merged_EPI == 'Moderate')
+high_gt <- subset(gt, merged_EPI == 'High')
+
+measure_plot_gts(df=data, dfnames=c('Low','Moderate','High'), gts=list(low_gt, moderate_gt, high_gt), func=RMSE)
+measure_plot_gts(df=data, dfnames=c('Low','Moderate','High'), gts=list(low_gt, moderate_gt, high_gt), func=MAE)
+```
+
+### Chi-squared test Fluency.
+Test if there is a difference in error for the two groups: Fluency 'yes' and fluency 'no'.
+```{r}
+cramer_eff_size <- function(cramer, df) {
+  small <- c(.1,.07,.06,.05,.04)
+  medium <- c(.3,.21,.17,.15,.13)
+  large <- c(.5,.35,.29,.25,.22)
+  if (cramer < small[[df]]) {
+    return('negligible')
+  }
+  if (cramer < medium[[df]]) {
+    return('small')
+  }
+  if (cramer < large[[df]]) {
+    return('medium')
+  }
+  return('large')
+}
+chi_sqr_score <- function(df, gt, feature, simulatep=FALSE, p=0.05) {
+  df <- df[df$id %in% gt$id,]
+  gt <- gt[gt$id %in% df$id,]
+  row.names(df) <- NULL
+  row.names(gt) <- NULL
+  
+  feature_idx <- get_feature_idx(gt, feature)
+  levels <- 0:10/10
+  
+  chi_sq_df <- data.frame(Column=character(), X2=double(), p.value=double(), signf=logical(),cramersV=double(), magnitude=character(), stringsAsFactors = FALSE)
+  truth_table <- data.frame(Column=character(), info=character(),
+                            '0.0'=integer(),'0.1'=integer(),'0.2'=integer(),'0.3'=integer(),'0.4'=integer(),'0.5'=integer(),
+                            '0.6'=integer(),'0.7'=integer(),'0.8'=integer(),'0.9'=integer(),'1.0'=integer(), stringsAsFactors = FALSE)
+  for (trait_idx in starting_index(df):length(df)) {
+    df[,trait_idx] <- round(df[,trait_idx], 1) # Put into 10 categories.
+    col <- fix_column_name(colnames(df)[[trait_idx]])
+    res <- chisq.test(df[,trait_idx], gt[,feature_idx], simulate.p.value = simulatep)
+    cramer <- cramersV(df[,trait_idx], gt[,feature_idx], simulate.p.value = simulatep)
+    chi_sq_df[nrow(chi_sq_df)+1, ] <- c(col,
+                                        round(res[['statistic']][['X-squared']],2),
+                                        round(res[['p.value']],2), res[['p.value']] < p,
+                                        round(cramer,2),
+                                        cramer_eff_size(cramer,length(levels(gt$Fluent))-1))
+    for (level in levels(gt[,feature_idx])) {
+      gt_sub <- subset(gt, gt[,feature_idx] == level)
+      truth_table[nrow(truth_table)+1,] <- c(col, level, table(factor(df[,trait_idx],levels=levels)))
+    }
+  }
+  colnames(chi_sq_df)[[4]] <- paste0('p<',p)
+  print(truth_table)
+  print(chi_sq_df)
+}
+chi_sqr_error <- function(df, gt, feature, simulatep=FALSE, p=0.05) {
+  df <- df[df$id %in% gt$id,]
+  gt <- gt[gt$id %in% df$id,]
+  row.names(df) <- NULL
+  row.names(gt) <- NULL
+  
+  feature_idx <- get_feature_idx(gt, feature)
+  levels <- 0:10/10
+  
+  chi_sq_df <- data.frame(Column=character(), X2=double(), p.value=double(), signf=logical(), cramersV=double(), magnitude=character(), stringsAsFactors = FALSE)
+  truth_table <- data.frame(Column=character(), info=character(),
+                            '0.0'=integer(),'0.1'=integer(),'0.2'=integer(),'0.3'=integer(),'0.4'=integer(),'0.5'=integer(),
+                            '0.6'=integer(),'0.7'=integer(),'0.8'=integer(),'0.9'=integer(),'1.0'=integer(), stringsAsFactors = FALSE)
+  for (trait_idx in starting_index(df):length(df)) {
+    ae <- round(AE(df, gt), 1) # Put into 10 categories.
+    col <- fix_column_name(colnames(df)[[trait_idx]])
+    res <- chisq.test(ae[,trait_idx], gt[,feature_idx], simulate.p.value = simulatep)
+    cramer <- cramersV(ae[,trait_idx], gt[,feature_idx], simulate.p.value = simulatep)
+    chi_sq_df[nrow(chi_sq_df)+1, ] <- c(col,
+                                        round(res[['statistic']][['X-squared']],2),
+                                        round(res[['p.value']],2), res[['p.value']] < p,
+                                        round(cramer,2),
+                                        cramer_eff_size(cramer,length(levels(gt$Fluent))-1))
+    for (level in levels(gt[,feature_idx])) {
+      gt_sub <- subset(gt, gt[,feature_idx] == level)
+      ae <- round(AE(df, gt_sub), 1)
+      truth_table[nrow(truth_table)+1,] <- c(col, level, table(factor(ae[,trait_idx],levels=levels)))
+    }
+  }
+  colnames(chi_sq_df)[[4]] <- paste0('p<',p)
+  print(truth_table)
+  print(chi_sq_df)
+}
+chi_sqr_error(data, gt, feature="Fluent", simulatep=TRUE)
+```
+
+```{r}
+# Without maybe.
+gt_fluent_no_maybe <- subset(gt, Fluent != "Maybe")
+gt_fluent_no_maybe$Fluent <- factor(gt_fluent_no_maybe$Fluent, levels = c("Yes", "No"))
+gt_mothertongue_no_maybe <- subset(gt, Mothertongue != "Maybe")
+gt_mothertongue_no_maybe$Mothertongue <- factor(gt_mothertongue_no_maybe$Mothertongue, levels = c("Yes", "No"))
+chi_sqr_error(data, gt_fluent_no_maybe, feature="Fluent", simulatep=TRUE)
+```
+```{r}
+chiscore <- chi_sqr_score(data, gt, feature="Fluent", simulatep = FALSE)
+```
+
+```{r}
+# Check for the results if you remove 'Maybe'.
+chiscore_no_maybe <- chi_sqr_score(data, gt_fluent_no_maybe, feature="Fluent", simulatep = FALSE)
+```
+
+```{r}
+latex_table(subset(chiscore_no_maybe,chiscore_no_maybe[,4]==TRUE),
+            caption="Chi-squared contingency table test with all significant associations between fluency and personality scores. The first column indicates the method and trait tested. The X2 column shows the chi-squared value. The column p.value indicates the found p-value, followed by a column indicating significance if $p<0.05$. The cramersV columns shows the effect size in terms of Cramer's V. The magnitude column indicates the interpretation of the Cramer's V in terms of effect size.",
+            label="RQ4_chisq_fluent_signf")
+```
+
+```{r}
+# Check if there are differences in the BFI scores found for 'Yes' and 'No' of Fluency and Mothertongue.
+compare_feature_ae_gt <- function(df, gt, feature) {
+  feature_idx <- get_feature_idx(gt, feature)
+  gt_fluent_yes <- subset(gt, gt[,feature_idx] == "Yes")
+  gt_fluent_no <- subset(gt, gt[,feature_idx] == "No")
+  ae_yes <- AE(df, gt_fluent_yes)
+  ae_no <- AE(df, gt_fluent_no)
+  wilc(ae_yes, ae_no, paired=FALSE)
+}
+compare_feature_ae_gt(data, gt_fluent_no_maybe, "Fluent")
+compare_feature_ae_gt(data, gt_mothertongue_no_maybe, "Mothertongue")
+```
+
+```{r}
+# Check if there are differences in the inferred scores for the 'Yes' and 'No' of Fluency and Mothertongue.
+compare_feature_gt <- function(df, gt, feature) {
+  feature_idx <- get_feature_idx(gt, feature)
+  gt_fluent_yes <- subset(gt, gt[,feature_idx] == "Yes")
+  gt_fluent_no <- subset(gt, gt[,feature_idx] == "No")
+  print(paste('Yes','No'))
+  for (i in 2:6) {
+    print(paste(round(mean(gt_fluent_yes[,i]),2),round(mean(gt_fluent_no[,i]),2)))
+  }
+  wilc(gt_fluent_yes[,1:6], gt_fluent_no[,1:6], paired=FALSE)
+}
+compare_feature_gt(data, gt_fluent_no_maybe, "Fluent")
+compare_feature_gt(data, gt_mothertongue_no_maybe, "Mothertongue")
+```
+
+```{r}
+for (i in 1:5) {
+  pi_idx <- i + 1
+  yark_idx <- pi_idx + 5
+  golb_idx <- yark_idx + 5
+  print(paste(fix_column_name(colnames(data)[[pi_idx]]),round(mean(data[,pi_idx]),2),' - ', 
+              fix_column_name(colnames(data)[[yark_idx]]),round(mean(data[,yark_idx]),2),' - ', 
+              fix_column_name(colnames(data)[[golb_idx]]),round(mean(data[,golb_idx]),2)))
+}
+```
+
+```{r}
+print_means_feature <- function(df, gt, feature) {
+  feature_idx <- get_feature_idx(gt, feature)
+  gt_feature_yes <- subset(gt, gt[,feature_idx] == "Yes")
+  gt_feature_no <- subset(gt, gt[,feature_idx] == "No")
+  df_merge_yes <- merge(gt_feature_yes, df)
+  df_merge_no <- merge(gt_feature_no, df)
+  dfnames <- c(paste(feature, 'Yes'),paste(feature,'No'))
+  x <- 1
+  for (df_ in list(df_merge_yes,df_merge_no)) {
+    print(dfnames[[x]])
+    for (i in 0:4) {
+      pi_idx <- get_feature_idx(df_merge_yes,'pi_openness') + i
+      yark_idx <- pi_idx + 5
+      golb_idx <- yark_idx + 5
+      print(paste(fix_column_name(colnames(df_)[[pi_idx]]),round(mean(df_[,pi_idx]),2),' - ', 
+                  fix_column_name(colnames(df_)[[yark_idx]]),round(mean(df_[,yark_idx]),2),' - ', 
+                  fix_column_name(colnames(df_)[[golb_idx]]),round(mean(df_[,golb_idx]),2)))
+    }
+    x <- x + 1
+  }
+}
+print_means_feature(data, gt, feature="Fluent")
+print_means_feature(data, gt, feature="Mothertongue")
+```
+
+### Check for normality
+```{r}
+repeated_shap_rq4(data, gt)
+```
+```{r}
+normal_cols = c(1,3,4,6:9,11,12,14)
+non_normal_cols = c(1,2,5,10,13,15,16)
+```
+
+### Check boxplots of the traits comparing the different groups.
+```{r, fig.width=9, fig.height=10}
+boxplots_feature <- function(df, gt, feature, save_to=NULL) {
+  merged <- merge(gt, data, by="id")
+  first_inferred_idx <- which(colnames(merged) == "pi_openness")
+  plot_list <- list()
+  
+  for (i in first_inferred_idx:(first_inferred_idx + 14)) {
+    col <- colnames(merged)[[i]]
+    p <- ggboxplot(merged, x=feature, y=col, color=feature, ylab=fix_column_name(col)) + 
+      ggtitle(paste(feature,'-',fix_column_name(col))) +
+      theme(plot.title = element_text(size=10, face="bold"))
+    plot_list[[length(plot_list)+1]] <- p
+  }
+  out <- ggarrange(plotlist=column_order(plot_list), ncol=3, nrow=5, common.legend=TRUE, align="h")
+  
+  if (!is.null(save_to)) {
+    ggsave(paste0("E:/Development/Thesis/images/", save_to), plot=out)
+  }
+  out
+}
+boxplots_feature(data, gt, feature="Fluent", save_to="Fluency-boxplots-with-maybe.png")
+boxplots_feature(data, gt_fluent_no_maybe, feature="Fluent", save_to="Fluency-boxplots.png")
+```
+
+```{r}
+compare_means <- function(df, gt, feature) {
+  merged <- merge(gt, df, by="id")
+  feature_idx <- get_feature_idx(merged, feature)
+  first_inferred_idx <- which(colnames(merged) == "pi_openness")
+  print(paste('Yes', 'No', 'Maybe'))
+  for (i in first_inferred_idx:(first_inferred_idx + 14)) {
+    yes <- mean(subset(merged, merged[,feature_idx] == "Yes")[,i])
+    no <- mean(subset(merged, merged[,feature_idx] == "No")[,i])
+    maybe <- mean(subset(merged, merged[,feature_idx] == "Maybe")[,i])
+    
+    print(paste(colnames(merged)[[i]],round(yes,2),round(no,2),round(maybe,2)," - ",round(max(yes,no,maybe)-min(yes,no,maybe),2)))
+  }
+}
+compare_means(data, gt, feature="Fluent")
+```
+
+```{r}
+compare_means(data, gt, feature="Mothertongue")
+```
+
+### Compare T-test for unpaired differences in means for normal traits.
+```{r}
+ttest_gt <- function(df, gt, feature) {
+  feature_idx <- get_feature_idx(gt, feature)
+  dfs <- list()
+  for (level in levels(gt[,feature_idx])) {
+    gt_sub <- subset(gt, gt[,feature_idx] == level)
+    df_sub <- subset(df, df$id %in% gt_sub$id)
+    row.names(df_sub) <- NULL
+    dfs[[length(dfs)+1]] <- df_sub
+  }
+  compare(ttest_eff, dfs=dfs, formatting="html", paired=FALSE, dfnames=levels(gt[,feature_idx]), columns=normal_cols, has_return=TRUE)
+}
+ttest_out <- ttest_gt(data, gt_fluent_no_maybe, feature="Fluent")
+ttest_out
+```
+
+### Compare Wilcoxon ranked sum test for unpaired differences in means for non-normal traits.
+```{r}
+wilc_gt <- function(df, gt, feature) {
+  feature_idx <- get_feature_idx(gt, feature)
+  dfs <- list()
+  for (level in levels(gt[,feature_idx])) {
+    gt_sub <- subset(gt, gt[,feature_idx] == level)
+    df_sub <- subset(df, df$id %in% gt_sub$id)
+    row.names(df_sub) <- NULL
+    dfs[[length(dfs)+1]] <- df_sub
+  }
+  compare(wilc, dfs=dfs, dfnames=levels(gt[,feature_idx]), paired=FALSE, columns=non_normal_cols, has_return=TRUE)
+}
+wilc_out <- wilc_gt(data, gt_fluent_no_maybe, feature="Fluent")
+wilc_out
+```
+
+### One-way Anova to check for differences in means for 3 groups (instead of two with t-test).
+```{r}
+eff_size_etasq <- function(etasq, signf) {
+  if (!signf) {
+    return('')
+  }
+  if (etasq >= 0.138) {
+    return('large')
+  }
+  if (etasq >= 0.059) {
+    return('medium')
+  }
+  if (etasq >= 0.01) {
+    return('small')
+  }
+  return('negligible')
+}
+
+aov_feature <- function(df, gt, feature, p=0.05, traits=NULL) {
+  merged <- merge(gt, data, by="id")
+  feature_idx <- get_feature_idx(merged, feature)
+  aov_df <- data.frame(Column=character(), Df=double(), F.value=double(), p.value=double(), signf=logical(), eta.sq=double(), effect=character(), stringsAsFactors = FALSE)
+  colnames(aov_df)[[5]] <- paste0('p<',p)
+  first_inferred_idx <- which(c(colnames(merged)) == "pi_openness")
+  for (i in first_inferred_idx:(first_inferred_idx + 14)) {
+    res.aov <- aov(merged[,i] ~ merged[,feature_idx], data=merged)
+    res.aov.summ <- summary(res.aov)
+    aov_df[nrow(aov_df)+1, ] <- c(
+      fix_column_name(colnames(merged)[[i]]),
+      res.aov.summ[[1]][["Df"]][[1]],
+      round(res.aov.summ[[1]][["F value"]][[1]],2),
+      round(res.aov.summ[[1]][["Pr(>F)"]][[1]],2),
+      res.aov.summ[[1]][["Pr(>F)"]][[1]] < p,
+      round(etaSquared(res.aov)[[1]],2),
+      eff_size_etasq(etaSquared(res.aov)[[1]], res.aov.summ[[1]][["Pr(>F)"]][[1]] < p)
+    )
+  }
+  if (1 %in% traits) {
+    traits <- traits[2:length(traits)] - 1
+  }
+  if (!is.null(traits)) {
+    aov_df <- aov_df[traits,]
+    row.names(aov_df) <- NULL
+  }
+  aov_df
+}
+aov_out <- aov_feature(data, gt, feature="Fluent", traits=normal_cols)
+aov_out
+```
+
+### Kruskal-Wallis to check for differences in means for 3 groups (non-parametric alternative AOV).
+```{r}
+kruskal_feature <- function(df, gt, feature, p=0.05, traits=NULL) {
+  merged <- merge(gt, data, by="id")
+  feature_idx <- get_feature_idx(merged, feature)
+  kruskal_df <- data.frame(Column=character(), Df=double(), Chisq=double(), p.value=double(), signf=logical(), stringsAsFactors = FALSE)
+  colnames(kruskal_df)[[5]] <- paste0('p<',p)
+  first_inferred_idx <- which(c(colnames(merged)) == "pi_openness")
+  for (i in first_inferred_idx:(first_inferred_idx + 14)) {
+    res <- kruskal.test(merged[,i] ~ merged[,feature_idx], data=merged)
+    kruskal_df[nrow(kruskal_df)+1, ] <- c(
+      fix_column_name(colnames(merged)[[i]]),
+      res[["parameter"]][["df"]],
+      round(res[["statistic"]][["Kruskal-Wallis chi-squared"]],2),
+      round(res[["p.value"]],2),
+      res[["p.value"]] < p
+    )
+  }
+  if (1 %in% traits) {
+    traits <- traits[2:length(traits)] - 1
+  }
+  if (!is.null(traits)) {
+    kruskal_df <- kruskal_df[traits,]
+    row.names(kruskal_df) <- NULL
+  }
+  kruskal_df
+}
+kruskal_out <- kruskal_feature(data, gt, feature="Fluent", traits=non_normal_cols)
+kruskal_out
+```
+```{r}
+summarize_differences <- function(dfs, p=0.05) {
+  out <- NULL
+  keys <- c()
+  for (df_i in 1:length(dfs)) {
+    df <- dfs[[df_i]]
+    df <- df[df$p.value < p,]
+    if (nrow(df) > 0) {
+      row.names(df) <- NULL
+      if (is.null(out)) {
+        out <- df
+      } else {
+        out <- rbind(out, df)
+      }
+      keys <- c(keys, rep(names(dfs)[[df_i]],nrow(df)))
+    }
+  }
+  row.names(out) <- NULL
+  out
+}
+latex_table(summarize_differences(dfs=wilc_out),
+            caption="All traits showing significant difference in means using Wilcoxon summed rank test. The first column indicates the method and the trait for which the differences in means are checked. The V column depicts the V-statistic. The column p.value shows the p-value found for the method which is assumed significant if below 0.05. The column r shows the r effect size with the effect column showing the corresponding effect size interpretation.",
+            label="RQ4_summ_wilcoxon_fluency",
+            shorten_names = 1,
+            include_index = FALSE)
+```
+
+```{r}
+latex_table(summarize_differences(dfs=list(aov_out)),
+            caption="All traits showing significant influence of Fluency using the unpaired One-way ANOVA. The first column shows the method and trait name. Df depicts the degrees of freedom. The F.value is the F-statistic. The p.value the p-value found followed by the significance for $p<0.05$. The eta.sq column is the Eta-squared effect size. The effect columns shows the effect size interpretation.",
+            label="RQ4_summ_aov_fluency",
+            shorten_names = NULL,
+            include_index = FALSE)
+```
+
+```{r}
+latex_table(summarize_differences(dfs=list(kruskal_out)),
+            caption="All traits showing significant association of Fluency on personality using the Kruskal-Wallis test. The first column indicates the method and trait name. The second column (Df) indicates the degrees of freedom. Chisq depicts the Chi-squared value. The p.value is the p-value found followed by the significance if $p<0.05$.",
+            label="RQ4_summ_kruskal_fluency",
+            shorten_names = NULL,
+            include_index = FALSE)
+```
+
+```{r}
+latex_table(summarize_differences(dfs=ttest_out),
+            caption="All traits showing significant difference in means using the unpaired t-test. The first column indicates the method and the trait for which the differences in means are checked. The V column depicts the V-statistic. The column p.value shows the p-value found for the method which is assumed significant if below 0.05. The column d shows the Cohen's d effect size with the magnitude column showing the corresponding effect size interpretation.",
+            label="RQ4_summ_ttest_fluency",
+            shorten_names = 1,
+            include_index = FALSE)
+```
+
+```{r}
+latex_tables <- function(outcomes, method, caption) {
+  for (key in names(outcomes)) {
+    cat(paste0("%\n%\n%\n% ", method, " [",key,"]\n%\n"))
+    caption <- gsub("\\{\\}", key, caption)
+    label <- paste(method, gsub(' ', '_', key), sep="_")
+    latex_table(outcomes[[key]], caption=caption, label=label, include_index = FALSE)
+    
+  }
+}
+latex_tables(wilc_gt(data, gt, feature="Fluent"),
+             method="wilcoxon-fluency",
+             caption="Wilcoxon summed rank test - Fluency [{}]. The first column indicates the method and the trait for which the differences in means are checked. The V column depicts the V-statistic. The column p.value shows the p-value found for the method which is assumed significant if below 0.05. The column r shows the r effect size with the effect column showing the corresponding effect size interpretation.")
+```
+```{r}
+latex_tables(ttest_gt(data, gt, feature="Fluent"),
+             method="t-test-fluency",
+             caption="Student t-test - Fluency [{}]. The first column indicates the method and the trait for which the differences in means are checked. The V column depicts the V-statistic. The column p.value shows the p-value found for the method which is assumed significant if below 0.05. The column d shows the Cohen's d effect size with the magnitude column showing the corresponding effect size interpretation.")
+```
+
+```{r}
+latex_table(aov_out, label="RQ4-one-way-anova", caption="One-way ANOVA test on the association between personality and Fluency. The first column shows the method and trait name. Df depicts the degrees of freedom. The F.value is the F-statistic. The p.value the p-value found followed by the significance for $p<0.05$. The eta.sq column is the Eta-squared effect size. The effect columns shows the effect size interpretation.")
+```
+
+```{r}
+latex_table(kruskal_out, label="RQ4-kruskal-wallis", caption="Kruskal-Wallis test on personality affect by Fluency")
+```
+
+## Now the same for Mothertongue.
+```{r}
+chi_sqr_error(data, gt_mothertongue_no_maybe, feature="Mothertongue", simulatep=TRUE)
+```
+
+```{r}
+chiscore_mt <- chi_sqr_score(data, gt_mothertongue_no_maybe, feature="Mothertongue", simulatep=TRUE)
+```
+
+```{r, fig.width=9, fig.height=10}
+boxplots_feature(data, gt, feature="Mothertongue", save_to="Mothertongue-boxplots.png")
+boxplots_feature(data, gt_mothertongue_no_maybe, feature="Mothertongue", save_to="Mothertongue-boxplots.png")
+```
+
+```{r}
+compare_means(data, gt, feature="Mothertongue")
+```
+
+```{r}
+wilc_out <- wilc_gt(data, gt_mothertongue_no_maybe, feature="Mothertongue")
+wilc_out
+```
+
+```{r}
+ttest_out <- ttest_gt(data, gt_mothertongue_no_maybe, feature="Mothertongue")
+ttest_out
+```
+
+```{r}
+aov_out <- aov_feature(data, gt, feature="Mothertongue")
+aov_out
+```
+
+```{r}
+kruskal_out <- kruskal_feature(data, gt, feature="Mothertongue", traits=non_normal_cols)
+kruskal_out
+```
+
+```{r}
+latex_table(summarize_differences(dfs=wilc_out),
+            caption="All traits showing significant difference in means using Wilcoxon summed rank test influenced by mother tongue. The first column indicates the method and the trait for which the differences in means are checked. The V column depicts the V-statistic. The column p.value shows the p-value found for the method which is assumed significant if below 0.05. The column r shows the r effect size with the effect column showing the corresponding effect size interpretation.",
+            label="RQ4_summ_wilcoxon_mothertongue",
+            shorten_names = 1,
+            include_index = FALSE)
+```
+
+```{r}
+latex_table(summarize_differences(dfs=ttest_out),
+            caption="All traits showing significant difference in means using the unpaired t-test influenced by mother tongue. The first column indicates the method and the trait for which the differences in means are checked. The V column depicts the V-statistic. The column p.value shows the p-value found for the method which is assumed significant if below 0.05. The column d shows the Cohen's d effect size with the magnitude column showing the corresponding effect size interpretation.",
+            label="RQ4_summ_ttest_mothertongue",
+            shorten_names = 1,
+            include_index = FALSE)
+```
+
+```{r}
+latex_table(summarize_differences(list(chiscore)),
+            caption="Chi-squared contingency table test with all significant associations between Mother tongue and personality scores. The first column indicates the method and trait tested. The X2 column shows the chi-squared value. The column p.value indicates the found p-value, followed by a column indicating significance if $p<0.05$. The cramersV columns shows the effect size in terms of Cramer's V. The magnitude column indicates the interpretation of the Cramer's V in terms of effect size.",
+            label="RQ4_chisq_fluent_signf")
+```
+
+```{r}
+latex_table(summarize_differences(list(chiscore_mt)),
+            caption="Chi-squared contingency table test with all significant associations between Mother tongue and personality scores. The first column indicates the method and trait tested. The X2 column shows the chi-squared value. The column p.value indicates the found p-value, followed by a column indicating significance if $p<0.05$. The cramersV columns shows the effect size in terms of Cramer's V. The magnitude column indicates the interpretation of the Cramer's V in terms of effect size.",
+            label="RQ4_chisq_mothertongue_signf")
+```
+
+```{r}
+latex_tables(wilc_gt(data, gt, feature="Mothertongue"),
+             method="wilcoxon-mothertongue",
+             caption="Wilcoxon summed rank test - Mother tongue [{}]. The first column indicates the method and the trait for which the differences in means are checked. The V column depicts the V-statistic. The column p.value shows the p-value found for the method which is assumed significant if below 0.05. The column r shows the r effect size with the effect column showing the corresponding effect size interpretation.")
+```
+
+```{r}
+latex_tables(ttest_gt(data, gt, feature="Mothertongue"),
+             method="t-test-mothertongue",
+             caption="Student t-test - Mother tongue [{}]. The first column indicates the method and the trait for which the differences in means are checked. The V column depicts the V-statistic. The column p.value shows the p-value found for the method which is assumed significant if below 0.05. The column d shows the Cohen's d effect size with the magnitude column showing the corresponding effect size interpretation.")
+```
+
+```{r}
+aov_out <- aov_feature(data, gt, feature="Mothertongue")
+latex_table(aov_out, label="RQ4-one-way-anova-mothertongue", caption="One-way ANOVA test on personality affected by Mother tongue showing all significant traits. The first column shows the method and trait name. Df depicts the degrees of freedom. The F.value is the F-statistic. The p.value the p-value found followed by the significance for $p<0.05$. The eta.sq column is the Eta-squared effect size. The effect columns shows the effect size interpretation.")
+```
+
+```{r}
+kruskal_out <- kruskal_feature(data, gt, feature="Mothertongue", traits=non_normal_cols)
+latex_table(kruskal_out,
+            label="RQ4-kruskal-wallis-mothertongue",
+            caption="Kruskal-Wallis test on personality affect by Mother tongue showing all significant traits. The first column indicates the method and trait name. The second column (Df) indicates the degrees of freedom. Chisq depicts the Chi-squared value. The p.value is the p-value found followed by the significance if $p<0.05$.")
+```
+
+
+
+## Comparison against the ground-truth.
+
+```{r}
+compare_metrics_feature <- function(df, gt, feature, filter=FALSE) {
+  total_out <- NULL
+  feature_idx <- get_feature_idx(gt, feature)
+
+  for (level in levels(gt[,feature_idx])) {
+    gt_sub <- subset(gt, gt[,feature_idx] == level)
+
+    out <- cbind(c(paste('RMSE',level),paste('MAE',level)),
+                 rbind(RMSE(df,gt_sub),MAE(df,gt_sub)))
+    colnames(out)[1] <- 'Df'
+
+    if (is.null(total_out)) {
+      total_out <- out
+    } else {
+      total_out <- rbind(total_out, out)
+    }
+  }
+  if (filter) {
+    
+  }
+  
+  total_out <- total_out[order(as.character(total_out$Df)),]
+  row.names(total_out) <- NULL
+  colnames(total_out) <- lapply(colnames(total_out),fix_column_name)
+  total_out
+}
+cmp_mtrcs_full <- compare_metrics_feature(data, gt, feature="Fluent")
+cmp_mtrcs_no_maybe <- compare_metrics_feature(data, gt_fluent_no_maybe, feature="Fluent")
+print(cmp_mtrcs_full)
+print(cmp_mtrcs_no_maybe)
+```
+
+```{r}
+latex_table(cmp_mtrcs_no_maybe, caption="Comparison of RMSE and MAE values of Fluency for the Yes and No groups. The first three columns show the MAE (Mean Absolute Error) values of the Maybe, No, and Yes groups. The next three columns show the RMSE (Root Mean Squared Error) values of these groups. For both the MAE and RMSE, the lower the better.",
+            label="tab:RQ4_RMSE_MAE_Fluency",
+            transpose=TRUE, include_index=TRUE, shorten_names=0)
+```
+
+```{r}
+latex_table(cmp_mtrcs_full,
+            caption="Comparison of RMSE and MAE values of Fluency for all three fluency groups (Yes, No, and Maybe). The first three columns show the MAE (Mean Absolute Error) values of the Maybe, No, and Yes groups. The next three columns show the RMSE (Root Mean Squared Error) values of these groups. For both the MAE and RMSE, the lower the better.",
+            label="tab:RQ4_RMSE_MAE_Fluency_full",
+            transpose=TRUE, include_index=TRUE, shorten_names=0)
+```
+
+### Check graph fluency.
+```{r}
+graphs_feature <- function(df, gt, feature, main) {
+  feature_idx <- get_feature_idx(gt, feature)
+
+  gts <- list()
+  dfnames <- c()
+  for (level in levels(gt[,feature_idx])) {
+    gt_sub <- subset(gt, gt[,feature_idx] == level)
+    row.names(gt_sub) <- NULL
+    gts[[length(gts)+1]] <- gt_sub
+    dfnames <- c(dfnames, level)
+  }
+
+  print(measure_plot_gts(df=df, dfnames=dfnames, gts=gts, func=RMSE, main=paste("RMSE -", main)))
+  measure_plot_gts(df=df, dfnames=dfnames, gts=gts, func=MAE, main=paste("MAE -", main))
+}
+graphs_feature(data, gt, feature="Fluent", main="Personality scores for each fluency group.")
+graphs_feature(data, gt_fluent_no_maybe, feature="Fluent", main="Personality scores for each fluency group.")
+```
+
+```{r}
+cmp_mtrcs <- compare_metrics_feature(data, gt_fluent_no_maybe, feature="Fluent")
+cmp_mtrcs
+```
+
+### Same for Mother tongue
+```{r}
+cmp_mtrcs <- compare_metrics_feature(data, gt, feature="Mothertongue")
+cmp_mtrcs
+```
+
+```{r}
+latex_table(cmp_mtrcs, caption="Comparison of RMSE and MAE values of Mother tongue for all three groups. The first three columns show the MAE (Mean Absolute Error) values of the Maybe, No, and Yes groups. The next three columns show the RMSE (Root Mean Squared Error) values of these groups. For both the MAE and RMSE, the lower the better.",
+            label="tab:RQ4_RMSE_MAE_Mothertongue_full",
+            transpose=TRUE, include_index=TRUE, shorten_names=0)
+```
+
+```{r}
+graphs_feature(data, gt, feature="Mothertongue", main="Mother tongue with maybe")
+graphs_feature(data, gt_mothertongue_no_maybe, feature="Mothertongue", main="Mother tongue")
+```
+
+```{r}
+repeated(shap, n=1000, df=gt[,c(1:6)], sample_size=sample_size, p=0.05)
+```
+
+```{r}
+fluent_gt <- subset(gt, Fluent == "Yes")
+nonfluent_gt <- subset(gt, Fluent == "No")
+
+fluent_gt
+nonfluent_gt
+ttest(fluent_gt[,c(1:6)], nonfluent_gt[,c(1:6)], paired=FALSE)
+```
+
+```{r}
+mean(fluent_gt$Openness)
+mean(nonfluent_gt$Openness)
+```
+```{r}
+mean(subset(gt, Continent_mapped == "America")$Openness)
+mean(subset(gt, Continent_mapped == "Europe")$Openness)
+mean(subset(gt, Continent_mapped == "Asia")$Openness)
+mean(subset(gt, Continent_mapped == "Africa")$Openness)
+mean(subset(gt, Continent_mapped == "Oceania")$Openness)
+```
+
+```{r}
+t.test(subset(gt, Continent_mapped == "America")$Openness, subset(gt, Continent_mapped == "Asia")$Openness, paired=FALSE)
+t.test(subset(gt, Continent_mapped == "Europe")$Openness, subset(gt, Continent_mapped == "Asia")$Openness, paired=FALSE)
+```
+
+```{r}
+america_data <- data[subset(gt, Continent_mapped == "America")$id %in% data$id,]
+europe_data <- data[subset(gt, Continent_mapped == "Europe")$id %in% data$id,]
+asia_data <- data[subset(gt, Continent_mapped == "Asia")$id %in% data$id,]
+
+t.test(america_data$pi_openness, asia_data$pi_openness, paired=FALSE)
+t.test(europe_data$pi_openness, asia_data$pi_openness, paired=FALSE)
+
+t.test(america_data$yarkoni_openness, asia_data$yarkoni_openness, paired=FALSE)
+t.test(europe_data$yarkoni_openness, asia_data$yarkoni_openness, paired=FALSE)
+
+t.test(america_data$golbeck_openness, asia_data$golbeck_openness, paired=FALSE)
+t.test(europe_data$golbeck_openness, asia_data$golbeck_openness, paired=FALSE)
+```

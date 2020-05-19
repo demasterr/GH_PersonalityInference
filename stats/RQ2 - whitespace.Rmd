@@ -1,0 +1,174 @@
+---
+title: "Research Question 2 - whitespace"
+author: "Frenk C.J. van Mil"
+output:
+  pdf_document: default
+  html_document:
+    df_print: paged
+  word_document: default
+---
+
+```{r, result='hide', echo=FALSE, include=FALSE}
+source('statistics.R')
+```
+
+```{r, results='hide', echo=FALSE, include=FALSE}
+transformations <- list(
+  c(13, log10_transform)
+)
+dbs_res <- readdbs('selected_dev_parsed', 'selected_dev_parsed_whitespace', transformations = transformations)
+
+data_og <- dbs_res$db1
+data_cmp <- dbs_res$db2
+
+dfs <- list(data_og, data_cmp)
+dfnames = c('original', 'whitespace')
+rm(dbs_res)
+```
+
+In order to evaluate research question 2, we need to connect to the MySQL database first. From the database we fetch to dataframes, _data\_og_ (scores with all preprocessing steps enabled) and _data\_cmp_ (scores without at whitespace parsing). Any column indicating significance (signf) means a `p-value` below `0.05` is found.
+
+## Summarize data
+```{r}
+summarize_df(dfs, dfnames=dfnames, fix_naming=TRUE)
+```
+
+From the summary of above, we can see that some columns do not seem to be affected (much). Only Yarkoni conscientiousness does seem to show a difference. However, this difference does not appear significant.
+
+Furthermore, by looking at the median and the mean, we can see that it seems that most column are not too skewed to one side. Therefore, normallity may be possible.
+
+```{r}
+inspect_AE_differences(df1 = data_og, df2 = data_cmp)
+```
+
+From the table above, we can observe that all traits are affected. It does seem that Yarkoni conscientiousness is affect much by it.
+
+```{r}
+latex_table(func=inspect_AE_differences, 
+            caption='Differences in scores for PI with and without lowercase parsing.',
+            label='tab:whitespace_diff',
+            include_index = TRUE,
+            fix_column = 0,
+            df1 = data_og, df2 = data_cmp)
+```
+
+First we will look if the distributions are normal or not. To visualize this, we draw histograms, density plots, and QQ-plots.
+
+```{r}
+hist_all(data_og, data_cmp)
+```
+
+```{r}
+density_all(data_og, data_cmp, name2='whitespace')
+```
+
+```{r, cache=TRUE}
+draw_qqplots(data_og, data_cmp)
+```
+
+By looking at the QQ-plots, we can see that some appear at least near-normally distributed. However, most do not seem to be normally distributed.
+
+
+## Shapiro-Wilk Normality test
+To make check our findings of the QQ-plots, we could use Shapiro-Wilk normality testing to check if the traits are significantly non-normal.
+```{r}
+sample_size <- 50
+repeats <- 1000
+shap_og <- shap(data_og, sample_size=sample_size)
+print(shap_og)
+
+shap_cmp <- shap(data_cmp, sample_size=sample_size)
+print(shap_cmp)
+
+repeated(shap, repeats, data_og, sample_size, p=0.05) # Check if the p-values are most of the time right.
+repeated(shap, repeats, data_og, sample_size=sample_size, p=0.05) # Check if the p-values are most of the time right.
+```
+
+
+From the above we can conclude that the data is significanlty different from a normal distribution for the following columns:
+- PI:
+  - Openness
+- Golbeck:
+  - Openness
+  - Extraversion
+  - Neuroticism
+
+## Fisher test (compare variances)
+Before we can compare whether there is a difference in means, we first need to compare the variances.
+
+```{r}
+fisherf_df <- fisherf(data_og, data_cmp)
+fisherf_df
+```
+From the Fisher F test, we could find a significant different for all personality traits in the variance. We should keep in mind this may be caused by outliers. However, by looking at the illustrations, this does not necessarily seem to be the case. The larger the value F, the larger the difference in variance is.
+
+Because we have already done this test, it wouldn't be necessary to do tests for the difference in means.
+
+## Wilcox signed rank test with continuaty correction (paired = TRUE)
+```{r}
+wilc_df <- wilc(data_og, data_cmp, paired = TRUE, p = 0.05)
+wilc_df
+```
+
+Because we found all columns to be significantly different from a normal distribution, we use the Wilcox rank sum test. The Wilcox rank sum test should show us under the hypothesis that the two means are the same. We assume that the pairing is needed, as the scores are drawn for the same person but with different parsing.
+For all columns, we reject the null hypothesis and conclude that the mean trait values for the original data and without code parsing are significantly different.
+
+## Wilcox rank sum test (paired = FALSE)
+```{r}
+wilc_rs_df <- wilc(data_og, data_cmp, paired = FALSE)
+wilc_rs_df
+```
+
+Would we ignore the pairing, we get the following results.
+For all columns, except for `pi_extraversion`, we reject the null hypothesis, and conclude that the mean trait values for the original data and without code parsing are significantly different.
+The larger the value of V, the larger the difference between the groups. Values for V close to zero would indicate (nearly) no difference between the datasets.
+
+## T-test
+```{r}
+ttest_df <- ttest(data_og, data_cmp, p=0.05)
+ttest_df
+```
+
+If the data would be normally distributed, we could also have used the t-test. However, we found earlier this is not the case.
+Still, if we execute the code, we can see there is not contradiction on all columns, except for `pi_extraversion`. This is not unexpected as the p-value for t-test is usually lower than the Wilcox ranked sum test p-value.
+From the above, we could have concluded that the means of the two sets of data are significantly different from each other for all personality traits.
+
+## Sign Test
+```{r}
+sign_df <- sign_test(data_og, data_cmp)
+sign_df
+```
+
+If we would not have been able to find a difference in the above methods, we could have used the sign test. In this case, it was not needed and gives the same results as above.
+_S, in this case, is the number of less frequent 
+
+## Effect size mean - Cohen's d
+```{r}
+cohensd_df <- cohensd(data_og, data_cmp)
+cohensd_df
+```
+
+## Chi-squared test
+```{r}
+chisq_df <- chi_sq_test(data_og, data_cmp, simulatep=TRUE, p=0.05)
+chisq_df
+```
+
+## Plots
+```{r}
+plot_line_ordered(data_og, data_cmp)
+```
+
+```{r}
+trait_boxplots(data_og, data_cmp)
+```
+
+```{r}
+ggplot_line_ordered(data_og, data_cmp)
+```
+
+```{r}
+# Possible extensions:
+# - ks.test (variance difference)
+# - 
+```
