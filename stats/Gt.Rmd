@@ -270,12 +270,12 @@ correlations_df <- function(df, correlation_method) {
     pi_idx <- trait_idx + 1
     yark_idx <- trait_idx + 6
     golb_idx <- trait_idx + 11
-    colnames(out) <- colnames(data)[c(pi_idx, yark_idx, golb_idx)]
+    colnames(out) <- colnames(df)[c(pi_idx, yark_idx, golb_idx)]
     row.names(out) <- colnames(out)
     
-    out[1,2] <- cor.test(x=data[,pi_idx], data[,yark_idx], method=correlation_method)[["estimate"]]
-    out[1,3] <- cor.test(x=data[,pi_idx], data[,golb_idx], method=correlation_method)[["estimate"]]
-    out[2,3] <- cor.test(x=data[,yark_idx], data[,golb_idx], method=correlation_method)[["estimate"]]
+    out[1,2] <- cor.test(x=df[,pi_idx], df[,yark_idx], method=correlation_method)[["estimate"]]
+    out[1,3] <- cor.test(x=df[,pi_idx], df[,golb_idx], method=correlation_method)[["estimate"]]
+    out[2,3] <- cor.test(x=df[,yark_idx], df[,golb_idx], method=correlation_method)[["estimate"]]
     out[1,1] <- "-"
     out[2,2] <- "-"
     out[3,3] <- "-"
@@ -291,4 +291,61 @@ correlations_df(data, "kendall")
 
 ```{r}
 correlations_df(data, "pearson")
+```
+
+```{r}
+correlations_gt <- function(df_in, gt_in, correlation_method, sample_size=50, iterations=1000) {
+  out <- data.frame(matrix(0, ncol=5,nrow=3), stringsAsFactors = FALSE)
+  colnames(out) <- traits
+  row.names(out) <- c('PI','Yarkoni','Golbeck')
+  
+  for(i in 1:iterations) {
+    df <- data.frame(df_in)
+    gt <- data.frame(gt_in)
+    df %>% filter(id %in% sample(unique(id),2))
+
+    df <- df[df$id %in% gt$id,]
+    gt <- gt[gt$id %in% df$id,]
+    sorted_dfs <- sortdfs(df,gt)
+    df <- sorted_dfs[[1]]
+    gt <- sorted_dfs[[2]]
+    
+    if(nrow(df) < 10) {
+      print(df)
+      print(gt)
+    }
+    
+    for (trait_idx in 1:5) {
+      pi_idx <- trait_idx + 1
+      yark_idx <- trait_idx + 6
+      golb_idx <- trait_idx + 11
+      
+      out[1,trait_idx] <- out[1,trait_idx] + cor.test(x=df[,pi_idx], gt[,trait_idx+1], method=correlation_method)[["estimate"]]
+      out[2,trait_idx] <- out[2,trait_idx] + cor.test(x=df[,yark_idx], gt[,trait_idx+1], method=correlation_method)[["estimate"]]
+      out[3,trait_idx] <- out[3,trait_idx] + cor.test(x=df[,golb_idx], gt[,trait_idx+1], method=correlation_method)[["estimate"]]
+    }
+  }
+  for (trait_idx in 1:5) {
+    out[1,trait_idx] <- out[1,trait_idx] / iterations
+    out[2,trait_idx] <- out[2,trait_idx] / iterations 
+    out[3,trait_idx] <- out[3,trait_idx] / iterations 
+  }
+  out
+}
+correlations_gt(data, gt, "pearson")
+```
+
+```{r}
+rounded_correlations_gt <- function(df, gt, method, rounding) {
+  data_rounded <- data.frame(df)
+  data_rounded <- round(data_rounded,rounding)
+  gt_rounded <- data.frame(gt[,c(1:6)])
+  gt_rounded <- round(gt_rounded,rounding)
+  row.names(data_rounded) <- NULL
+  row.names(gt_rounded) <- NULL
+  
+  correlations_gt(data_rounded, gt_rounded, method)
+}
+
+rounded_correlations_gt(data, gt, "pearson", 1)
 ```

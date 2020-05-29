@@ -22,7 +22,9 @@ data_og <- dbs_res$db1
 data_cmp <- dbs_res$db2
 
 dfs <- list(data_og, data_cmp)
-dfnames = c('original', 'whitespace')
+dfnames <- c('Enabled', 'Disabled')
+method <- "whitespace"
+method_full <- "white space"
 rm(dbs_res)
 ```
 
@@ -45,21 +47,22 @@ From the table above, we can observe that all traits are affected. It does seem 
 
 ```{r}
 latex_table(func=inspect_AE_differences, 
-            caption='Differences in scores for PI with and without lowercase parsing.',
-            label='tab:whitespace_diff',
-            include_index = TRUE,
-            fix_column = 0,
+            caption=get_caption("summarize",method_full),
+            label=paste0('tab:', method,'_diff'),
+            include_index = FALSE,
+            fix_column = 1,
+            centering = TRUE,
             df1 = data_og, df2 = data_cmp)
 ```
 
 First we will look if the distributions are normal or not. To visualize this, we draw histograms, density plots, and QQ-plots.
 
 ```{r}
-hist_all(data_og, data_cmp)
+hist_all(data_og, data_cmp, dfname=method_full)
 ```
 
 ```{r}
-density_all(data_og, data_cmp, name2='whitespace')
+density_all(data_og, data_cmp, dfname=method_full)
 ```
 
 ```{r, cache=TRUE}
@@ -80,8 +83,8 @@ print(shap_og)
 shap_cmp <- shap(data_cmp, sample_size=sample_size)
 print(shap_cmp)
 
-repeated(shap, repeats, data_og, sample_size, p=0.05) # Check if the p-values are most of the time right.
-repeated(shap, repeats, data_og, sample_size=sample_size, p=0.05) # Check if the p-values are most of the time right.
+repeated(shap, repeats, data_og, sample_size) # Check if the p-values are most of the time right.
+repeated(shap, repeats, data_og, sample_size=sample_size) # Check if the p-values are most of the time right.
 ```
 
 
@@ -106,26 +109,16 @@ Because we have already done this test, it wouldn't be necessary to do tests for
 
 ## Wilcox signed rank test with continuaty correction (paired = TRUE)
 ```{r}
-wilc_df <- wilc(data_og, data_cmp, paired = TRUE, p = 0.05)
+wilc_df <- wilc(data_og, data_cmp, paired = TRUE)
 wilc_df
 ```
 
 Because we found all columns to be significantly different from a normal distribution, we use the Wilcox rank sum test. The Wilcox rank sum test should show us under the hypothesis that the two means are the same. We assume that the pairing is needed, as the scores are drawn for the same person but with different parsing.
 For all columns, we reject the null hypothesis and conclude that the mean trait values for the original data and without code parsing are significantly different.
 
-## Wilcox rank sum test (paired = FALSE)
-```{r}
-wilc_rs_df <- wilc(data_og, data_cmp, paired = FALSE)
-wilc_rs_df
-```
-
-Would we ignore the pairing, we get the following results.
-For all columns, except for `pi_extraversion`, we reject the null hypothesis, and conclude that the mean trait values for the original data and without code parsing are significantly different.
-The larger the value of V, the larger the difference between the groups. Values for V close to zero would indicate (nearly) no difference between the datasets.
-
 ## T-test
 ```{r}
-ttest_df <- ttest(data_og, data_cmp, p=0.05)
+ttest_df <- ttest(data_og, data_cmp)
 ttest_df
 ```
 
@@ -133,25 +126,10 @@ If the data would be normally distributed, we could also have used the t-test. H
 Still, if we execute the code, we can see there is not contradiction on all columns, except for `pi_extraversion`. This is not unexpected as the p-value for t-test is usually lower than the Wilcox ranked sum test p-value.
 From the above, we could have concluded that the means of the two sets of data are significantly different from each other for all personality traits.
 
-## Sign Test
-```{r}
-sign_df <- sign_test(data_og, data_cmp)
-sign_df
-```
-
-If we would not have been able to find a difference in the above methods, we could have used the sign test. In this case, it was not needed and gives the same results as above.
-_S, in this case, is the number of less frequent 
-
 ## Effect size mean - Cohen's d
 ```{r}
 cohensd_df <- cohensd(data_og, data_cmp)
 cohensd_df
-```
-
-## Chi-squared test
-```{r}
-chisq_df <- chi_sq_test(data_og, data_cmp, simulatep=TRUE, p=0.05)
-chisq_df
 ```
 
 ## Plots

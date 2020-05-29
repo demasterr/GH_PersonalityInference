@@ -22,7 +22,9 @@ data_og <- dbs_res$db1
 data_cmp <- dbs_res$db2
 
 dfs <- list(data_og, data_cmp)
-dfnames = c('original', 'double whitespace')
+dfnames <- c('Enabled', 'Disabled')
+method <- "doublewhitespace"
+method_full <- "double white space"
 rm(dbs_res)
 ```
 
@@ -42,21 +44,13 @@ inspect_AE_differences(df1 = data_og, df2 = data_cmp)
 ```
 From the above we can conclude that there is almost no difference for Golbeck extraversion, agreeableness, and neuroticism. For Golbeck openness and conscientiousness there is close to zero difference.
 
-We now reduce the dataframes to the columns that have some difference in them.
-```{r}
-# Reduce the columns to the columns that have an effect.
-data_og <- data_og[1:13]
-data_cmp <- data_cmp[1:13]
-dfs <- list(data_og, data_cmp)
-```
-
-
 ```{r}
 latex_table(func=inspect_AE_differences, 
-            caption=paste("Differences in scores for PI with and without", dfnames[[2]], "parsing (not reporting traits without differences)."),
-            label=paste0('tab:', dfnames[[2]],'_diff'),
-            include_index = TRUE,
-            fix_column = 0,
+            caption=get_caption("summarize",method_full),
+            label=paste0('tab:', method,'_diff'),
+            include_index = FALSE,
+            fix_column = 1,
+            centering = TRUE,
             df1 = data_og, df2 = data_cmp)
 ```
 
@@ -64,11 +58,11 @@ latex_table(func=inspect_AE_differences,
 First we will look if the distributions are normal or not. To visualize this, we draw histograms, density plots, and QQ-plots.
 
 ```{r}
-hist_all(data_og, data_cmp)
+hist_all(data_og, data_cmp, dfname=method_full)
 ```
 
 ```{r}
-density_all(data_og, data_cmp, name2='whitespace')
+density_all(data_og, data_cmp, dfname=method_full)
 ```
 
 ```{r, cache=TRUE}
@@ -89,8 +83,8 @@ print(shap_og)
 shap_cmp <- shap(data_cmp, sample_size=sample_size)
 print(shap_cmp)
 
-repeated(shap, repeats, data_og, sample_size, p=0.05) # Check if the p-values are most of the time right.
-repeated(shap, repeats, data_og, sample_size=sample_size, p=0.05) # Check if the p-values are most of the time right.
+repeated(shap, repeats, data_og, sample_size) # Check if the p-values are most of the time right.
+repeated(shap, repeats, data_og, sample_size=sample_size) # Check if the p-values are most of the time right.
 ```
 
 
@@ -119,7 +113,7 @@ Because we have already done this test, it wouldn't be necessary to do tests for
 
 ## Wilcox signed rank test with continuaty correction (paired = TRUE)
 ```{r}
-wilc_df <- wilc(data_og, data_cmp, paired = TRUE, p = 0.05)
+wilc_df <- wilc(data_og, data_cmp, paired = TRUE)
 wilc_df
 ```
 
@@ -128,7 +122,7 @@ For all columns, we reject the null hypothesis and conclude that the mean trait 
 
 ## T-test
 ```{r}
-ttest_df <- ttest(data_og, data_cmp, p=0.05)
+ttest_df <- ttest(data_og, data_cmp)
 ttest_df
 ```
 
@@ -152,17 +146,11 @@ cohensd_df
 ```
 
 ```{r}
-latex_table(func=wilc, caption="Paired Wilcoxon signed-rank test between the original data and double white space parsing disabled.", label="tab:doublewhitespace_wilcox", df1=data_og[normal_cols], df2=data_cmp[normal_cols], p=0.05, paired=TRUE)
+latex_table(func=wilc, caption=get_caption("wilc",method_full), label=paste0("tab:",method,"_wilcox"), df1=data_og[,non_normal_cols], df2=data_cmp[,non_normal_cols], paired=TRUE)
 ```
 
 ```{r}
-latex_table(func=ttest_eff, caption="Paired t-test and Cohen's d effect sizes between the original data and double white space parsing disabled.", label="tab:doublewhitespace_ttest", df1=data_og[non_normal_cols], df2=data_cmp[non_normal_cols], p=0.05, paired=TRUE)
-```
-
-## Chi-squared test
-```{r}
-chisq_df <- chi_sq_test(data_og, data_cmp, simulatep=TRUE, p=0.05)
-chisq_df
+latex_table(func=ttest_eff, caption=get_caption("ttest",method_full), label=paste0("tab:",method,"_ttest"), df1=data_og[,normal_cols], df2=data_cmp[,normal_cols], paired=TRUE)
 ```
 
 ## Plots
@@ -177,18 +165,3 @@ trait_boxplots(data_og, data_cmp)
 ```{r}
 ggplot_line_ordered(data_og, data_cmp)
 ```
-
-```{r}
-gt <- get_ground_truth()
-
-inspect_gt_non_zero(data_og, data_cmp, dfnames=dfnames, gt=gt)
-```
-
-Lets only check the columns with a difference.
-```{r}
-inspection <- inspect_gt_non_zero(data_og, data_cmp, dfnames=dfnames, gt=gt)
-inspection <- inspection[c(1,3,4,6)]
-inspection
-```
-
-We see an improvement for PI C and E and slightly worsen for N.

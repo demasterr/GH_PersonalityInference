@@ -22,7 +22,9 @@ data_og <- dbs_res$db1
 data_cmp <- dbs_res$db2
 
 dfs <- list(data_og, data_cmp)
-dfnames = c('original', 'emails')
+dfnames = c('Enabled', 'Disabled')
+method <- "emails"
+method_full <- "email"
 rm(dbs_res)
 ```
 
@@ -46,20 +48,22 @@ inspect_AE_differences(df1 = data_og, df2 = data_cmp)
 
 ```{r}
 latex_table(func=inspect_AE_differences, 
-            caption=paste("Differences in scores for PI with and without", dfnames[[2]], "parsing."),
-            label=paste0('tab:', dfnames[[2]],'_diff'),
-            include_index = TRUE,
-            fix_column = 0,
+            caption=get_caption("summarize",method_full),
+            label=paste0('tab:', method,'_diff'),
+            include_index = FALSE,
+            fix_column = 1,
+            centering = TRUE,
             df1 = data_og, df2 = data_cmp)
 ```
 
 Then we will look if the distributions are normal or not. To visualize this, we draw histograms, density plots, and QQ-plots.
 
 ```{r}
-hist_all(data_og, data_cmp)
+hist_all(data_og, data_cmp, dfname=method_full)
 ```
+
 ```{r}
-density_all(data_og, data_cmp, name2='emails')
+density_all(data_og, data_cmp, dfname=method_full)
 ```
 
 ```{r, cache=TRUE}
@@ -127,15 +131,6 @@ ttest_df
 If the data would be normally distributed, we could also have used the t-test. However, we found earlier this is not the case.
 Still, if we execute the code, we can see the same results as above for the non-parametric methods.
 
-## Sign Test
-```{r}
-sign_df <- sign_test(data_og, data_cmp)
-sign_df
-```
-
-If we would not have been able to find a difference in the above methods, we could have used the sign test. In this case, it was not needed and gives the same results as above.
-_S, in this case, is the number of less frequent signs_
-
 ## Effect size mean - Cohen's d
 ```{r}
 cohensd_df <- cohensd(data_og[,normal_cols], data_cmp[,normal_cols])
@@ -145,19 +140,13 @@ cohensd_df
 With Cohen's d we show the effect size of the difference in mean. Combining this with the significance found above, we can say something about the actual difference between the datasets. With the conclusions we had drawn above, we can now conclude there is no indications for any difference in the means.
 
 ```{r}
-latex_table(func=wilc, caption=paste("Paired Wilcoxon signed-rank test between the original data and", dfnames[[2]],"parsing disabled."), label=paste0("tab:",dfnames[[2]],"_wilcox"), df1=data_og[,non_normal_cols], df2=data_cmp[,non_normal_cols], p=0.05, paired=TRUE, method="wilcoxon-pratt")
+latex_table(func=wilc, caption=get_caption("wilc",method_full), label=paste0("tab:",method,"_wilcox"), df1=data_og[,non_normal_cols], df2=data_cmp[,non_normal_cols], paired=TRUE, method="wilcoxon-pratt")
 ```
 
-```{r}
-latex_table(func=ttest_eff, caption=paste("Paired t-test and Cohen's d effect sizes between the original data and", dfnames[[2]],"parsing disabled."), label=paste0("tab:",dfnames[[2]],"_ttest"), df1=data_og[,normal_cols], df2=data_cmp[,normal_cols], p=0.05, paired=TRUE)
-```
 
-## Chi-squared test
 ```{r}
-chisq_df <- chi_sq_test(data_og, data_cmp, simulatep = TRUE)
-chisq_df
+latex_table(func=ttest_eff, caption=get_caption("ttest",method_full), label=paste0("tab:",method,"_ttest"), df1=data_og[,normal_cols], df2=data_cmp[,normal_cols], paired=TRUE)
 ```
-From the Chi-squared test, we could not find any significant indication of indepedence between the variables.
 
 ## Plots
 ```{r}
@@ -175,7 +164,8 @@ ggplot_line_ordered(data_og, data_cmp)
 ```{r}
 gt <- get_ground_truth()
 
-inspect_gt_non_zero(data_og, data_cmp, dfnames=dfnames, gt=gt)
+insp <- inspect_gt_non_zero(data_og, data_cmp, dfnames=dfnames, gt=gt)
+insp
 ```
 
 ```{r}
@@ -183,9 +173,15 @@ inspect_gt(data_og, data_cmp, dfnames=dfnames, gt=gt)
 ```
 
 ```{r}
-diff_cols <- c(1,3,4,5,8,9,10,12,13,14,15,16)
+diff_cols <- get_diff_cols(insp)
 
-latex_table(inspect_gt, caption=paste("Difference in RMSE and MAE scores with the original dataset compared to the", dfnames[[2]],"dataset."), label=paste0("tab:",dfnames[[2]],"_gt_RMSE_MAE"), include_index=TRUE, fix_column=0, transpose=TRUE, df1=data_og, df2=data_cmp, dfnames=dfnames, gt=gt, columns=diff_cols)
+latex_table(inspect_gt, caption=get_caption("accuracy",method_full), label=paste0("tab:",method,"_gt_RMSE_MAE"),
+            include_index=FALSE,
+            shorten_names=1,
+            fix_column=1,
+            transpose=TRUE,
+            alignment="c",
+            df1=data_og, df2=data_cmp, dfnames=dfnames, gt=gt, columns=diff_cols)
 ```
 
 

@@ -22,7 +22,9 @@ data_og <- dbs_res$db1
 data_cmp <- dbs_res$db2
 
 dfs <- list(data_og, data_cmp)
-dfnames = c('original', 'code')
+dfnames = c('Enabled', 'Disabled')
+method <- "code"
+method_full <- "code block"
 rm(dbs_res)
 ```
 
@@ -47,10 +49,11 @@ From the above, we can see that the preprocessing step does have a large effect 
 
 ```{r}
 latex_table(func=inspect_AE_differences, 
-            caption=paste("Differences in scores for PI with and without", dfnames[[2]], "parsing."),
-            label=paste0('tab:', dfnames[[2]],'_diff'),
-            include_index = TRUE,
-            fix_column = 0,
+            caption=get_caption("summarize",method_full),
+            label=paste0('tab:', method,'_diff'),
+            include_index = FALSE,
+            fix_column = 1,
+            centering = TRUE,
             df1 = data_og, df2 = data_cmp)
 ```
 
@@ -58,12 +61,12 @@ latex_table(func=inspect_AE_differences,
 First we will look if the distributions are normal or not. To visualize this, we draw histograms, density plots, and QQ-plots.
 
 ```{r}
-hist_all(data_og, data_cmp)
-```
-```{r}
-density_all(data_og, data_cmp, name2='codeblocks')
+hist_all(data_og, data_cmp, dfname=method_full)
 ```
 
+```{r}
+density_all(data_og, data_cmp, dfname=method_full)
+```
 
 ```{r, cache=TRUE}
 draw_qqplots(data_og, data_cmp)
@@ -131,12 +134,12 @@ cohensd_df
 ```
 
 ```{r}
-latex_table(func=wilc, caption=paste("Paired Wilcoxon signed-rank test between the original data and", dfnames[[2]],"parsing disabled."), label=paste0("tab:",dfnames[[2]],"_wilcox"), df1=data_og[,non_normal_cols], df2=data_cmp[,non_normal_cols], p=0.05, paired=TRUE)
+latex_table(func=wilc, caption=get_caption("wilc",method_full), label=paste0("tab:",method,"_wilcox"), df1=data_og[,non_normal_cols], df2=data_cmp[,non_normal_cols], paired=TRUE)
 ```
 
 
 ```{r}
-latex_table(func=ttest_eff, caption=paste("Paired t-test and Cohen's d effect sizes between the original data and", dfnames[[2]],"parsing disabled."), label=paste0("tab:",dfnames[[2]],"_ttest"), df1=data_og[,normal_cols], df2=data_cmp[,normal_cols], p=0.05, paired=TRUE)
+latex_table(func=ttest_eff, caption=get_caption("ttest",method_full), label=paste0("tab:",method,"_ttest"), df1=data_og[,normal_cols], df2=data_cmp[,normal_cols], paired=TRUE)
 ```
 
 ## Plots
@@ -163,9 +166,15 @@ insp
 ```{r}
 diff_cols <- get_diff_cols(insp)
 
-latex_table(inspect_gt, caption=paste("Difference in RMSE and MAE scores with the original dataset compared to the", dfnames[[2]],"dataset."), label=paste0("tab:",dfnames[[2]],"_gt_RMSE_MAE"), include_index=TRUE, fix_column=0, transpose=TRUE, df1=data_og, df2=data_cmp, dfnames=dfnames, gt=gt, columns=diff_cols)
+latex_table(inspect_gt, caption=get_caption("accuracy",method_full), label=paste0("tab:",method,"_gt_RMSE_MAE"),
+            include_index=FALSE,
+            shorten_names=1,
+            fix_column=1,
+            transpose=TRUE,
+            alignment="c",
+            df1=data_og, df2=data_cmp, dfnames=dfnames, gt=gt, columns=diff_cols)
 ```
 
 ```{r}
-measure_plot(dfs=list(data, data_cmp), dfnames=list('og', 'cmp'), gt=gt, func=MAE, main='MAE for original scores compared to code block scores.', truncate_columns = TRUE, show_legend=TRUE, legend_title='Dataset', size_in_legend = FALSE)
+measure_plot(dfs=list(data_og, data_cmp), dfnames=list('og', 'cmp'), gt=gt, func=MAE, main='MAE for original scores compared to code block scores.', truncate_columns = TRUE, show_legend=TRUE, legend_title='Dataset', size_in_legend = FALSE)
 ```

@@ -22,7 +22,9 @@ data_og <- dbs_res$db1
 data_cmp <- dbs_res$db2
 
 dfs <- list(data_og, data_cmp)
-dfnames = c('original', 'space')
+dfnames <- c('Enabled','Disabled')
+method <- "space"
+method_full <- "space before punctuation"
 rm(dbs_res)
 ```
 
@@ -52,10 +54,11 @@ inspect_AE_differences(df1 = data_og, df2 = data_cmp)
 
 ```{r}
 latex_table(func=inspect_AE_differences, 
-            caption=paste("Differences in scores for PI with and without", dfnames[[2]], "parsing."),
-            label=paste0('tab:', dfnames[[2]],'_diff'),
-            include_index = TRUE,
-            fix_column = 0,
+            caption=get_caption("summarize",method_full),
+            label=paste0('tab:', method,'_diff'),
+            include_index = FALSE,
+            fix_column = 1,
+            centering = TRUE,
             df1 = data_og, df2 = data_cmp)
 ```
 

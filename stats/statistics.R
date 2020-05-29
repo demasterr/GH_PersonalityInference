@@ -149,10 +149,9 @@ readdbs <- function(dbname1, dbname2, normalize = TRUE, remove_exclam = FALSE, r
   res2[,-1] <- round(res2[,-1], 2)
   
   if (sort) {
-    res1 <- res1[order(res1$id),] # Sort on the id column
-    res2 <- res2[order(match(res2$id, res1$id)),]
-    row.names(res1) <- NULL
-    row.names(res2) <- NULL
+    sorted_res <- sortdfs(res1,res2)
+    res1 <- sorted_res[[1]]
+    res2 <- sorted_res[[2]]
   }
   
   RMariaDB::dbDisconnect(mydb)
@@ -187,6 +186,15 @@ read_single_db <- function(dbname, normalize=TRUE, transformations=list(), raw=T
   res1[,-1] <- round(res1[,-1], 2)
   
   return(res1)
+}
+
+# Sort two dataframe with same ordering
+sortdfs <- function(df1, df2) {
+  res1 <- df1[order(df1$id),] # Sort on the id column
+  res2 <- df2[order(match(df2$id, df1$id)),]
+  row.names(res1) <- NULL
+  row.names(res2) <- NULL
+  return(list(res1,res2))
 }
 
 # Read the database with default query.
@@ -476,13 +484,13 @@ ttest <- function(df1, df2, p=0.05, fix_column=TRUE, paired=TRUE) {
   
   ttest_df <- data.frame(Trait=character(), V=double(), p.value=double(), signf=logical(), stringsAsFactors = FALSE)
   
-  if (length(df2) < length(df1)) {
-    i_df2 <- ((i-2) %% 5) + 2 # If df2 is gt.
-  } else {
-    i_df2 <- i
-  }
-  
   for (i in 2:length(colnames(df1))) {
+    if (length(df2) < length(df1)) {
+      i_df2 <- ((i-2) %% 5) + 2 # If df2 is gt.
+    } else {
+      i_df2 <- i
+    }
+    
     res <- t.test(df1[,i], df2[,i_df2], paired = paired, alternative='two.sided')
     ttest_df[nrow(ttest_df)+1, ] <- c(fix_column_name(colnames(df1)[i],fix_column),
                                       round(res[['statistic']],2),
@@ -542,13 +550,13 @@ sign_test <- function(df1, df2, p=0.05) {
 cohensd <- function(df1, df2, paired=TRUE, fix_column=TRUE) {
   cohensd <- data.frame(Trait=character(), d=double(), lower=double(), upper=double(), magnitude=character(), stringsAsFactors = FALSE)
   
-  if (length(df2) < length(df1)) {
-    i_df2 <- ((i-2) %% 5) + 2 # If df2 is gt.
-  } else {
-    i_df2 <- i
-  }
-  
   for (i in 2:length(colnames(df1))) {
+    if (length(df2) < length(df1)) {
+      i_df2 <- ((i-2) %% 5) + 2 # If df2 is gt.
+    } else {
+      i_df2 <- i
+    }
+    
     res <- cohen.d(df1[,i], df2[,i_df2], paired = paired)
     cohensd[nrow(cohensd)+1, ] <- c(fix_column_name(colnames(df1)[i],fix_column),
                                     round(res[['estimate']],2),
@@ -579,36 +587,32 @@ levene <- function(df1, df2, p=0.05) {
   for (i in 2:length(colnames(df1))) {
     res <- leveneTest(df1[,i], df2[,i])
     print(colnames(df1)[i])
-    # levene_df[nrow(levene_df)+1, ] <- c(colnames(df1)[i],
-    #                                     paste0('F(',test[['Df']][[1]],',',test[['Df']][[2]],')=',round(test[['F value']][[1]],2)),
-    #                                     round(test[['Pr(>F)']][[1]],2),
-    #                                     test[['Pr(>F)']][[1]] < p)
   }
   levene_df
 }
 
 # Draw histograms
-hist_all <- function(df1, df2) {
+hist_all <- function(df1, df2, dfname, name1='Enabled', name2='Disabled') {
   for (i in 2:length(colnames(df1))) {
     col_name <- fix_column_name(colnames(df1)[[i]])
     his1 <- hist(df1[,i], plot=FALSE)
     his2 <- hist(df2[,i], plot=FALSE)
 
-    plot(his1, col = adjustcolor(color$c1, alpha.f=0.5), main=col_name, ylim=c(0,ceiling(max(his1[['counts']],his2[['counts']]))))
+    plot(his1, col = adjustcolor(color$c1, alpha.f=0.5), main=paste('Histogram of',dfname,'parsing -',col_name), ylim=c(0,ceiling(max(his1[['counts']],his2[['counts']]))))
     plot(his2, col = adjustcolor(color$c2, alpha.f=0.5), add=TRUE)
 
-    legend(x="topright", y=0.92, legend=c('OG', 'CMP'), col=c(color$c1,color$c2), pch=c('-','-'), lwd=10)
+    legend(x="topright", y=0.92, legend=c(name1,name2), col=c(color$c1,color$c2), pch=c('-','-'), lwd=10)
   }
 }
 
 # Draw density plots
-density_all <- function(df1, df2, name1='original', name2='CMP') {
+density_all <- function(df1, df2, dfname, name1='Enabled', name2='Disabled') {
   for (i in 2:length(colnames(df1))) {
     col_name <- fix_column_name(colnames(df1)[[i]])
     density1 <- density(df1[,i])
     density2 <- density(df2[,i])
 
-    plot(density1, col = color$c1, xlab=col_name, main=paste('Density graph',col_name), ylim=c(0,ceiling(max(density1[['y']],density2[['y']]))))
+    plot(density1, col = color$c1, xlab=col_name, main=paste('Density graph of',dfname,'parsing -',col_name), ylim=c(0,ceiling(max(density1[['y']],density2[['y']]))))
     lines(density2, col = color$c2)
     legend(x="topright", y=0.92, legend=c(name1, name2), col=c(color$c1,color$c2), pch=c('-','-'), lwd=10)
   }
@@ -673,7 +677,7 @@ trait_boxplots <- function(df1, df2) {
 # Create a shiny latex table from a data.frame.
 # Example usage 1: latex_table(summarize_df, caption='Summarization of the original dataset (df1) and the reference dataset (df2).', label='tab:data_sanitization/at/summarization', data_og, data_cmp)
 # Example usage 2: latex_table(latex_table(wilc_df, caption='Wilcoxon signed-rank test of the original dataset and reference dataset.', label='tab:data_sanitization/at/wilc')
-latex_table <- function(func, caption, label, include_index=FALSE, fix_column = NULL, transpose=FALSE, shorten_names=NULL, ...) {
+latex_table <- function(func, caption, label, include_index=FALSE, fix_column = NULL, transpose=FALSE, shorten_names=NULL, centering=TRUE, alignment=NULL, ...) {
   bold <- function(x) {paste('\\textbf{',x,'}', sep='')}
   if (is.null(func)) {
     warning("Given func type was NULL. No Latex table could be reported.")
@@ -688,16 +692,20 @@ latex_table <- function(func, caption, label, include_index=FALSE, fix_column = 
   }
   if (transpose) {
     new_col_names <- df[,1]
+    row_name <- colnames(df)[[1]]
+    traits <- colnames(df)[-1]
     df <- as.data.frame(t(df[,-1]))
     colnames(df) <- new_col_names
+    df <- tibble::rownames_to_column(df, row_name)
+    df[1] <- traits
   }
-  
+
   # Fix column names if this is specified
   if (!is.null(fix_column)) {
     if (fix_column == 0) {
       rownames(df) <- lapply(rownames(df), fix_column_name)
     } else if (fix_column > 0 && fix_column <= length(df)) {
-      df[,fix_column] <- lapply(df[,fix_column], fix_column_name)
+      df[,fix_column] <- sapply(df[,fix_column], fix_column_name)
     } else {
       warning('Unknown fix_column specified. Is the value a valid column in the data frame?')
     }
@@ -727,15 +735,23 @@ latex_table <- function(func, caption, label, include_index=FALSE, fix_column = 
   if (!startsWith(label, 'tab:')) {
     label <- paste0('tab:',label)
   }
-  
-  print(xtable(df, caption=caption, label=label), 
+  # If an alignment is specified, this is used.
+  if(!is.null(alignment) && is.character(alignment)) {
+    if(length(alignment) == 1) {
+      alignment <- c('','l',rep(alignment, length(df) - 1))
+    } else {
+      alignment <- c('',alignment)
+    }
+  }
+
+  print(xtable(df, caption=caption, label=label, align = alignment), 
         booktabs=FALSE,
         add.to.row = list(pos = as.list(c(rws, -1, 0,nrow(df))),command = as.vector(c(col,'\\topline\n\\headcol ','\\midline\n','\\bottomrule\n'))),
         include.rownames=include_index, # remove indices before each row
         caption.placement = 'top', # caption above table
         sanitize.colnames = bold, # bold headers
         hline.after=NULL,       # remove default hlines
-        latex.environments=NULL, # remove centering
+        latex.environments=ifelse(centering, "center", ""), # remove centering
         comment = FALSE # Remove the preceding comment.
       )
 }
@@ -883,7 +899,6 @@ plot_metric_bars <- function(dM, cn, ylab, stds=NULL, feature='size', main="", s
   dM <- melt(dM, measure.vars=cn, id.vars='size')
   do_std <- !is.null(stds) && nrow(stds) > 0
   if (do_std) {
-    print(stds)
     stdsM <- melt(stds, measure.vars=cn, id.vars='size')
     colnames(stdsM) <- c('size', 'variable', 'std')
     dM <- merge(dM, stdsM, by=c('size', 'variable'))
@@ -934,7 +949,7 @@ measure_plot <- function(dfs, dfnames, gt, func, std=0, feature='size', main="",
     func_df$size <- size_var
     func_dfs <- append(func_dfs, list(func_df))
     
-    if (std > 0 && std <= 1) {
+    if (std == 1) {
       ae <- AE(df, gt_)
       std_df <- data.frame(matrix(nrow=1,ncol=15), stringsAsFactors = FALSE)
       for (col in 1:length(std_df)) {
@@ -952,10 +967,9 @@ measure_plot <- function(dfs, dfnames, gt, func, std=0, feature='size', main="",
     cn <- lapply(cn, shorten_column_name)
   }
   colnames(dM) <- c(cn, 'size')
-  if (std > 0 && std <= 1) {
+  if (std == 1) {
     colnames(std_dfs) <- c(cn, 'size')
     row.names(std_dfs) <- dfnames
-    print(std_dfs)
     latex_table(std_dfs, transpose=TRUE, label='RQ3-std-AE-size',
                 caption=paste0(std*100,'\\% Confidence interval of the absolute error for each method and trait for the different number of words fed to the analyses. The columns indicate the number of words given to the analyes (i.e, 100 words, 600 words, 1200 words, and 3000 or more words).'),
                 include_index = TRUE)
@@ -988,14 +1002,12 @@ inspect_gt <- function(df1, df2, dfnames, gt, columns=NULL) {
 
   df1 <- df1[df1$id %in% ae$id,]
   df2 <- df2[df2$id %in% ae$id,]
-  
-  print(nrow(df1[df1$id %in% gt$id,]))
 
-  out <- cbind(c(paste(dfnames[[1]],'RMSE'),paste(dfnames[[2]],'RMSE'),
-                 paste(dfnames[[1]],'MAE'),paste(dfnames[[2]],'MAE')),
+  out <- cbind(c(paste('Enabled RMSE'),paste('Disabled RMSE'),
+                 paste('Enabled MAE'),paste('Disabled MAE')),
                rbind(RMSE(df1,gt),RMSE(df2,gt),
                      MAE(df1,gt),MAE(df2,gt)))
-  colnames(out)[1] <- 'Df'
+  colnames(out)[[1]] <- 'Trait'
   if (!is.null(columns)) {
     out <- out[,columns]
   }
@@ -1029,12 +1041,11 @@ inspect_gt_non_zero <- function(df1, df2, dfnames, gt, people=TRUE, columns=NULL
                rbind(RMSE(df1,gt),RMSE(df2,gt),
                      MAE(df1,gt),MAE(df2,gt)))
   
-  cat(paste("People with gt in df:", nrow(df1[df1$id %in% gt$id,]),'\n'))
   if (people) {
     out <- add_people_column(ae, gt, out)
   }
   
-  colnames(out)[1] <- 'Df'
+  colnames(out)[1] <- 'Trait'
   if (!is.null(columns)) {
     out <- out[,columns]
   }
@@ -1056,7 +1067,7 @@ compare_metrics <- function(df1, df2, dfnames, gt, people=TRUE) {
                    paste(dfnames[[1]],'MAE'),paste(dfnames[[2]],'MAE')),
                  rbind(RMSE(df1_sub,gt),RMSE(df2_sub,gt),
                        MAE(df1_sub,gt),MAE(df2_sub,gt)))
-    colnames(out)[1] <- 'Df'
+    colnames(out)[1] <- 'Trait'
     if (is.null(total_out)) {
       total_out <- out
     } else {
@@ -1076,30 +1087,25 @@ inspect_AE_differences <- function(df1, df2, error_margin=0) {
   }
   
   ae <- AE(df=df1, gt=df2)
-  row_sub = apply(ae, 1, function(row) any(row[2:length(ae)] > error_margin))
-  non_zero_rows <- ae[row_sub,]
-  non_zero_rows[,1:length(non_zero_rows)] <- sapply(non_zero_rows[,1:length(non_zero_rows)], as.numeric)
-  # Get the summed differences of each trait.
-  non_zero_rows_sum <- round(non_zero_rows %>% summarize_if(is.numeric, sum, na.rm=TRUE),2)
-  non_zero_rows_sum[1,1] <- 'Summed diff.'
   # Get the maximum differences for each trait.
-  non_zero_rows_max <- round(non_zero_rows %>% summarize_if(is.numeric, max, na.rm=TRUE),2)
-  non_zero_rows_max[1,1] <- 'Max diff.'
+  non_zero_rows_max <- round(ae %>% summarize_if(is.numeric, max, na.rm=TRUE),2)
+  non_zero_rows_max[1,1] <- 'Max abs. diff.'
   # Get the mean differences for each trait.
-  non_zero_rows_mean <- round(non_zero_rows %>% summarize_if(is.numeric, mean, na.rm=TRUE),2)
-  non_zero_rows_mean[1,1] <- 'Mean diff.'
+  non_zero_rows_mean <- round(ae %>% summarize_if(is.numeric, mean, na.rm=TRUE),2)
+  non_zero_rows_mean[1,1] <- 'Mean abs. diff.'
   # Get the number of people with differences for each trait.
   people_involved <- function(x) {
-    sum(x > 0, na.rm = TRUE)
+    round(sum(x > 0, na.rm = TRUE)/nrow(df1)*100,1)
   }
   non_zero_rows_count <- sapply(X=ae, FUN=people_involved)
-  non_zero_rows_count[1] <- 'People'
+  non_zero_rows_count[1] <- '%People'
   
   
-  merged <- rbind(non_zero_rows_sum, non_zero_rows_max, non_zero_rows_mean, non_zero_rows_count)
+  merged <- rbind(non_zero_rows_max, non_zero_rows_mean, non_zero_rows_count)
   colnames(merged)[1] <- 'Metric'
   transposed <- as.data.frame(t(merged[,-1]))
   colnames(transposed) <- merged$Metric
+  transposed <- tibble::rownames_to_column(transposed, "Trait")
   transposed
 }
 
@@ -1191,4 +1197,43 @@ column_order <- function(l, rows=5, cols=3) {
     }
   }
   out
+}
+
+get_caption <- function(method, dfname) {
+  caption <- NULL
+  if(equals("wilc",method)) {
+    caption <- glue("Paired Wilcoxon signed-rank test between the scores with the {dfname} preprocessing step enabled and disabled. ", 
+                "The columns from left to right: the method and trait tested, the V-statistic, the p-value, ",
+                "a boolean indicating significance for p-values below 0.05, a measure of effect size r, and ",
+                "an interpretation of the effect size r.")
+  } else if(equals("ttest",method)) {
+    caption <- glue("Paired t-test and Cohen's d effect sizes between the scores with the {dfname} preprocessing step enabled and disabled. ",
+                    "The columns from left to right: the method and trait tested, the V-statistic, the p-value, a ",
+                    "boolean indicating significance for p-values below 0.05, the effect size in terms of Cohen's d, ",
+                    "and an interpretation of the effect size Cohen's d.")
+  } else if(equals("summarize",method)) {
+    caption <- glue("Absolute differences in scores for traits with and without {dfname} parsing. The first column shows the ",
+                    "personality trait. Then from left to right: the maximum absolute difference observed (indicating the worst case value), the mean ",
+                    "absolute difference (indicating an overall effect), and the percentage of people showing a difference with and without the ",
+                    "preprocessing step rounded to one decimal")
+  } else if(equals("accuracy",method)) {
+    caption <- glue("RMSE and MAE scores for traits with and without {dfname} parsing when compared to the ground-truth. ",
+                    "The lower the RMSE and MAE, the better. The columns from left to right: the method and personality trait ",
+                    "(shortened) for which the RMSE and MAE scores are checked, the RMSE for the scores with {dfname} parsing enabled, ",
+                    "the RMSE for the scores with {dfname} parsing disabled, ",
+                    "the MAE for the scores with {dfname} parsing enabled, ",
+                    "and the MAE for the scores with {dfname} parsing disabled.")
+  } else if(equals("accuracy_non_zero",method)) {
+    caption <- glue("RMSE and MAE scores for traits with and without {dfname} parsing when compared to the ground-truth. ",
+                    "The lower the RMSE and MAE, the better. The columns from left to right: the method and personality trait ",
+                    "(shortened) for which the RMSE and MAE scores are checked, the RMSE for the scores with {dfname} parsing enabled, ",
+                    "the RMSE for the scores with {dfname} parsing disabled, ",
+                    "the MAE for the scores with {dfname} parsing enabled, ",
+                    "the MAE for the scores with {dfname} parsing disabled, ",
+                    "and the number of people showing a difference in scores contained in the ground-truth.")
+  }
+  if (is.null(caption)) {
+    stop("Could not find a caption for method: " + method)
+  }
+  return(as.character(caption))
 }

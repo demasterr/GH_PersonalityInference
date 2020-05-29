@@ -22,7 +22,9 @@ data_og <- dbs_res$db1
 data_cmp <- dbs_res$db2
 
 dfs <- list(data_og, data_cmp)
-dfnames = c('original', 'numbers')
+dfnames = c('Enabled', 'Disabled')
+method <- "numbers"
+method_full <- "number"
 rm(dbs_res)
 ```
 
@@ -45,21 +47,22 @@ inspect_AE_differences(df1 = data_og, df2 = data_cmp)
 
 ```{r}
 latex_table(func=inspect_AE_differences, 
-            caption=paste("Absolute differences in scores for PI with and without", dfnames[[2]], "parsing."),
-            label=paste0('tab:', dfnames[[2]],'_diff'),
-            include_index = TRUE,
-            fix_column = 0,
+            caption=get_caption("summarize",method_full),
+            label=paste0('tab:', method,'_diff'),
+            include_index = FALSE,
+            fix_column = 1,
+            centering = TRUE,
             df1 = data_og, df2 = data_cmp)
 ```
 
 Then we will look if the distributions are normal or not. To visualize this, we draw histograms, density plots, and QQ-plots.
 
 ```{r}
-hist_all(data_og, data_cmp)
+hist_all(data_og, data_cmp, dfname=method_full)
 ```
 
 ```{r}
-density_all(data_og, data_cmp, name2='numbers')
+density_all(data_og, data_cmp, dfname="method_full")
 ```
 
 ```{r, cache=TRUE}
@@ -80,8 +83,8 @@ print(shap_og)
 shap_cmp <- shap(data_cmp, sample_size=sample_size)
 print(shap_cmp)
 
-repeated(shap, repeats, data_og, sample_size, p=0.05) # Check if the p-values are most of the time right.
-repeated(shap, repeats, data_og, sample_size=sample_size, p=0.05) # Check if the p-values are most of the time right.
+repeated(shap, repeats, data_og, sample_size) # Check if the p-values are most of the time right.
+repeated(shap, repeats, data_og, sample_size=sample_size) # Check if the p-values are most of the time right.
 ```
 
 
@@ -102,7 +105,7 @@ non_normal_cols <- c(1,2,16)
 Before we can compare whether there is a difference in means, we first need to compare the variances.
 
 ```{r}
-fisherf_df <- fisherf(data_og, data_cmp, p=0.05)
+fisherf_df <- fisherf(data_og, data_cmp)
 fisherf_df
 ```
 From the Fisher F test, we could find a significant different for all personality traits in the variance. We should keep in mind this may be caused by outliers. However, by looking at the illustrations, this does not necessarily seem to be the case. The larger the value F, the larger the difference in variance is.
@@ -111,7 +114,7 @@ Because we have already done this test, it wouldn't be necessary to do tests for
 
 ## Wilcox signed rank test with continuaty correction (paired = TRUE)
 ```{r}
-wilc_df <- wilc(data_og[,non_normal_cols], data_cmp[,non_normal_cols], paired = TRUE, p=0.05)
+wilc_df <- wilc(data_og[,non_normal_cols], data_cmp[,non_normal_cols], paired = TRUE)
 wilc_df
 ```
 
@@ -120,7 +123,7 @@ For all columns, we reject the null hypothesis and conclude that the mean trait 
 
 ## T-test
 ```{r}
-ttest_df <- ttest(data_og[,normal_cols], data_cmp[,normal_cols], paired=TRUE, p=0.05)
+ttest_df <- ttest(data_og[,normal_cols], data_cmp[,normal_cols], paired=TRUE)
 ttest_df
 ```
 
@@ -135,11 +138,11 @@ cohensd_df
 ```
 
 ```{r}
-latex_table(func=wilc, caption=paste("Paired Wilcoxon signed-rank test between the original data and", dfnames[[2]],"parsing disabled."), label=paste0("tab:",dfnames[[2]],"_wilcox"), df1=data_og[,non_normal_cols], df2=data_cmp[,non_normal_cols], p=0.05, paired=TRUE)
+latex_table(func=wilc, caption=get_caption("wilc",method_full), label=paste0("tab:",method,"_wilcox"), df1=data_og[,non_normal_cols], df2=data_cmp[,non_normal_cols], p=0.05, paired=TRUE)
 ```
 
 ```{r}
-latex_table(func=ttest_eff, caption=paste("Paired t-test and Cohen's d effect sizes between the original data and", dfnames[[2]],"parsing disabled."), label=paste0("tab:",dfnames[[2]],"_ttest"), df1=data_og[,normal_cols], df2=data_cmp[,normal_cols], p=0.05, paired=TRUE)
+latex_table(func=ttest_eff, caption=get_caption("ttest",method_full), label=paste0("tab:",method,"_ttest"), df1=data_og[,normal_cols], df2=data_cmp[,normal_cols], paired=TRUE)
 ```
 
 ## Plots
@@ -165,7 +168,13 @@ insp
 ```{r}
 diff_cols <- get_diff_cols(insp)
 
-latex_table(inspect_gt_non_zero, caption=paste("Difference in RMSE and MAE scores with the original dataset compared to the", dfnames[[2]],"dataset."), label=paste0("tab:",dfnames[[2]],"_gt_RMSE_MAE"), include_index=TRUE, fix_column=0, transpose=TRUE, df1=data_og, df2=data_cmp, dfnames=dfnames, gt=gt, columns=diff_cols)
+latex_table(inspect_gt_non_zero, caption=get_caption("accuracy",method_full), label=paste0("tab:",method,"_gt_RMSE_MAE"),
+            include_index=FALSE,
+            shorten_names=1,
+            fix_column=1,
+            transpose=TRUE,
+            alignment="c",
+            df1=data_og, df2=data_cmp, dfnames=dfnames, gt=gt, columns=diff_cols)
 ```
 
 ```{r}
