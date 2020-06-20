@@ -203,18 +203,18 @@ plotty(data)
 ```
 
 ```{r}
-show_confint <- function(df, gt) {
+check_high_missers <- function(df, gt) {
   ae <- AE(df, gt)
 
-  out <- data.frame(matrix(ncol=15,nrow=2), stringsAsFactors = FALSE)
-  for (i in 2:15) {
-    std <- sd(ae[,i])
-    nfive <- std*0.95
-    nnine <- std*0.99
-    
+  print(ae)
+  out <- data.frame(matrix(ncol=15,nrow=1), stringsAsFactors = FALSE)
+  for (i in 2:16) {
+    out[,i-1] <- nrow(ae[ae[,i] >0.6,])
   }
+  colnames(out) <- colnames(ae[2:16])
+  out
 }
-show_confint(data,gt)
+check_high_missers(data,gt)
 ```
 
 ```{r}

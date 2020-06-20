@@ -914,7 +914,7 @@ plot_metric_bars <- function(dM, cn, ylab, stds=NULL, feature='size', main="", s
     geom_vline(xintercept = c(5.5, 10.5), linetype='dotted') +
     ggtitle(main) + guides(fill=guide_legend(title=legend_title))
   if (do_std) {
-    p <- p + geom_errorbar(aes(ymin=value-std, ymax=value+std), width=.05, position=position_dodge(.9), alpha=0.4, size=1.1)
+    p <- p + geom_errorbar(aes(ymin=value-min(value,1.96*std), ymax=value+1.96*std), width=.05, position=position_dodge(.9), alpha=0.4, size=1.1)
   }
   x <- 3
   for (method in methods) {
